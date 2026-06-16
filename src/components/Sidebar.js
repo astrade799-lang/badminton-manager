@@ -1,14 +1,6 @@
 'use client'
 
-const menus = [
-  { id: 'ringkasan', label: 'Ringkasan',        ikon: '📊' },
-  { id: 'stok',      label: 'Manajemen Stok',   ikon: '📦' },
-  { id: 'hutang',    label: 'Hutang Pelanggan', ikon: '💳' },
-  { id: 'kas',       label: 'Kas Bisnis',       ikon: '💰' },
-  { id: 'export',    label: 'Export Laporan',   ikon: '📤' },
-]
-
-export default function Sidebar({ aktif, onChange }) {
+export default function Sidebar({ aktif, onChange, menus = [] }) {
   return (
     <nav style={{
       width: 240,
@@ -45,7 +37,6 @@ export default function Sidebar({ aktif, onChange }) {
             border: 'none',
             width: '100%', textAlign: 'left',
             fontFamily: 'inherit',
-            transition: 'all 0.15s',
           }}
         >
           <span style={{ fontSize: 16, width: 22, textAlign: 'center' }}>

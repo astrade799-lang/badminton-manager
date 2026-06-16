@@ -10,3 +10,65 @@ body {
   color: #f1f5f9;
   min-height: 100vh;
 }
+
+/* ── TYPOGRAPHY ── */
+body {
+  font-size: 15px;
+  line-height: 1.6;
+  letter-spacing: -0.1px;
+}
+
+/* Tabel lebih readable */
+table {
+  font-size: 14px;
+}
+
+thead th {
+  font-size: 12px !important;
+  letter-spacing: 0.5px;
+}
+
+tbody td {
+  font-size: 14px !important;
+  line-height: 1.5;
+}
+
+/* Input & Select lebih jelas */
+input, select, textarea {
+  font-size: 14px !important;
+  line-height: 1.5;
+}
+
+/* Scrollbar custom — lebih rapi di dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Monospace font lebih jelas untuk angka */
+.font-mono, [style*="monospace"] {
+  font-family: 'JetBrains Mono', 'Courier New', monospace !important;
+  font-size: 13px;
+}
+
+/* Animasi smooth untuk semua transisi */
+* {
+  transition: background-color 0.15s ease, 
+              border-color 0.15s ease,
+              color 0.15s ease;
+}
+
+/* Tombol tidak ikut transisi panjang */
+button {
+  transition: opacity 0.1s ease, transform 0.1s ease !important;
+}
