@@ -72,3 +72,46 @@ input, select, textarea {
 button {
   transition: opacity 0.1s ease, transform 0.1s ease !important;
 }
+
+/* ── RESPONSIVE MOBILE ── */
+
+/* CSS Variable untuk breakpoint */
+:root {
+  --mobile: 768px;
+}
+
+/* Sembunyikan sidebar di mobile */
+@media (max-width: 768px) {
+  /* Konten tidak perlu margin kiri (sidebar hilang) */
+  .konten-utama {
+    margin-left: 0 !important;
+    padding: 16px !important;
+    padding-bottom: 80px !important; /* ruang untuk bottom nav */
+  }
+
+  /* Header lebih compact */
+  .header-tanggal {
+    display: none; /* sembunyikan tanggal di mobile */
+  }
+
+  /* Grid kartu: 2 kolom di mobile */
+  .grid-kartu-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Grid kartu: 1 kolom di mobile kecil */
+  .grid-kartu-3 {
+    grid-template-columns: repeat(1, 1fr) !important;
+  }
+
+  /* Tabel: scroll horizontal */
+  .tabel-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Font lebih besar untuk touch */
+  button {
+    min-height: 40px;
+  }
+}

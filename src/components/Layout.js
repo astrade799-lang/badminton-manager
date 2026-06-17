@@ -12,14 +12,22 @@ import Kas from './halaman/Kas'
 import Export from './halaman/Export'
 
 export default function Layout() {
-  const [user, setUser]       = useState(null)      // data user Supabase
-  const [profile, setProfile] = useState(null)      // data role dari user_profiles
+  const [user, setUser]       = useState(null)
+  const [profile, setProfile] = useState(null)
   const [aktif, setAktif]     = useState('ringkasan')
-  const [authLoading, setAuthLoading] = useState(true) // cek session awal
+  const [authLoading, setAuthLoading] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
 
-  // ── CEK SESSION SAAT APP DIBUKA ───────────────────────────
-  // Kenapa: supaya kalau user sudah pernah login,
-  // tidak perlu login lagi saat refresh halaman
+  // Deteksi mobile
+  useEffect(() => {
+    function cekUkuran() {
+      setIsMobile(window.innerWidth <= 768)
+    }
+    cekUkuran()
+    window.addEventListener('resize', cekUkuran)
+    return () => window.removeEventListener('resize', cekUkuran)
+  }, [])
+
   useEffect(() => {
     async function cekSession() {
       const { data: { session } } = await supabase.auth.getSession()
@@ -31,7 +39,6 @@ export default function Layout() {
     }
     cekSession()
 
-    // Listen perubahan auth (login/logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (session?.user) {
@@ -58,35 +65,37 @@ export default function Layout() {
     setAktif('ringkasan')
   }
 
-  function handleLoginSuccess(user) {
-    setUser(user)
-  }
-
-  // ── MENU BERDASARKAN ROLE ─────────────────────────────────
   const isAdmin = profile?.role === 'admin'
 
-  // Menu yang tampil di sidebar sesuai role
   const menuAdmin = [
-    { id: 'ringkasan',  label: 'Ringkasan',        ikon: '📊' },
-    { id: 'stok',       label: 'Manajemen Stok',   ikon: '📦' },
-    { id: 'transaksi',  label: 'Transaksi',         ikon: '🛒' },
-    { id: 'hutang',     label: 'Hutang Pelanggan',  ikon: '💳' },
-    { id: 'kas',        label: 'Kas Bisnis',        ikon: '💰' },
-    { id: 'export',     label: 'Export Laporan',    ikon: '📤' },
-    { id: 'pengaturan', label: 'Pengaturan',        ikon: '⚙️' },
+    { id: 'ringkasan',  label: 'Ringkasan',       ikon: '📊' },
+    { id: 'stok',       label: 'Stok',             ikon: '📦' },
+    { id: 'transaksi',  label: 'Transaksi',        ikon: '🛒' },
+    { id: 'hutang',     label: 'Hutang',           ikon: '💳' },
+    { id: 'kas',        label: 'Kas',              ikon: '💰' },
+    { id: 'export',     label: 'Export',           ikon: '📤' },
+    { id: 'pengaturan', label: 'Pengaturan',       ikon: '⚙️' },
   ]
 
   const menuKasir = [
-    { id: 'ringkasan',  label: 'Ringkasan',        ikon: '📊' },
-    { id: 'stok',       label: 'Manajemen Stok',   ikon: '📦' },
-    { id: 'transaksi',  label: 'Transaksi',         ikon: '🛒' },
-    { id: 'hutang',     label: 'Hutang Pelanggan',  ikon: '💳' },
-    { id: 'kas',        label: 'Kas Bisnis',        ikon: '💰' },
+    { id: 'ringkasan',  label: 'Ringkasan',       ikon: '📊' },
+    { id: 'stok',       label: 'Stok',            ikon: '📦' },
+    { id: 'transaksi',  label: 'Transaksi',       ikon: '🛒' },
+    { id: 'hutang',     label: 'Hutang',          ikon: '💳' },
+    { id: 'kas',        label: 'Kas',             ikon: '💰' },
   ]
 
   const menus = isAdmin ? menuAdmin : menuKasir
 
-  // Halaman yang bisa diakses
+  // Menu yang tampil di bottom nav mobile (max 5)
+  const menuMobile = [
+    { id: 'ringkasan',  label: 'Beranda',    ikon: '📊' },
+    { id: 'transaksi',  label: 'Transaksi',  ikon: '🛒' },
+    { id: 'stok',       label: 'Stok',       ikon: '📦' },
+    { id: 'hutang',     label: 'Hutang',     ikon: '💳' },
+    { id: 'kas',        label: 'Kas',        ikon: '💰' },
+  ]
+
   const halaman = {
     ringkasan:  <Ringkasan />,
     stok:       <Stok isAdmin={isAdmin} />,
@@ -99,7 +108,6 @@ export default function Layout() {
     }),
   }
 
-  // ── LOADING AWAL ──────────────────────────────────────────
   if (authLoading) {
     return (
       <div style={{ minHeight: '100vh', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' }}>
@@ -111,29 +119,76 @@ export default function Layout() {
     )
   }
 
-  // ── BELUM LOGIN → tampilkan halaman login ─────────────────
-  if (!user) {
-    return <Login onLoginSuccess={handleLoginSuccess} />
-  }
+  if (!user) return <Login onLoginSuccess={setUser} />
 
-  // ── SUDAH LOGIN → tampilkan app ───────────────────────────
   return (
     <div>
-      <Header
-        profile={profile}
-        onLogout={handleLogout}
-      />
+      <Header profile={profile} onLogout={handleLogout} isMobile={isMobile} />
+
       <div style={{ display: 'flex', paddingTop: 60, minHeight: '100vh' }}>
-        <Sidebar aktif={aktif} onChange={setAktif} menus={menus} />
-        <main style={{ marginLeft: 240, flex: 1, padding: 28, minHeight: 'calc(100vh - 60px)' }}>
+
+        {/* Sidebar — hanya tampil di desktop */}
+        {!isMobile && (
+          <Sidebar aktif={aktif} onChange={setAktif} menus={menus} />
+        )}
+
+        {/* Konten Utama */}
+        <main style={{
+          marginLeft: isMobile ? 0 : 240,
+          flex: 1,
+          padding: isMobile ? '16px' : '28px',
+          paddingBottom: isMobile ? '80px' : '28px',
+          minHeight: 'calc(100vh - 60px)',
+        }}>
           {halaman[aktif] || <Ringkasan />}
         </main>
       </div>
+
+      {/* Bottom Navigation — hanya tampil di mobile */}
+      {isMobile && (
+        <nav style={{
+          position: 'fixed',
+          bottom: 0, left: 0, right: 0,
+          background: '#1e293b',
+          borderTop: '1px solid #334155',
+          display: 'flex',
+          zIndex: 100,
+          paddingBottom: 'env(safe-area-inset-bottom)', // iPhone notch support
+        }}>
+          {menuMobile.map(menu => (
+            <button
+              key={menu.id}
+              onClick={() => setAktif(menu.id)}
+              style={{
+                flex: 1,
+                padding: '8px 4px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 3,
+                color: aktif === menu.id ? '#4ade80' : '#475569',
+                fontFamily: 'inherit',
+                transition: 'color 0.15s',
+              }}
+            >
+              <span style={{ fontSize: 20 }}>{menu.ikon}</span>
+              <span style={{
+                fontSize: 10, fontWeight: aktif === menu.id ? 700 : 500,
+              }}>
+                {menu.label}
+              </span>
+            </button>
+          ))}
+        </nav>
+      )}
     </div>
   )
 }
 
-// ── HALAMAN PENGATURAN (hanya admin) ─────────────────────────
+// Halaman Pengaturan
 function Pengaturan({ profile }) {
   return (
     <div>
@@ -141,22 +196,26 @@ function Pengaturan({ profile }) {
         <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.5, marginBottom: 4 }}>⚙️ Pengaturan</div>
         <div style={{ fontSize: 14, color: '#94a3b8' }}>Kelola akun dan pengaturan aplikasi</div>
       </div>
-      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, marginBottom: 20 }}>
+      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24 }}>
         <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid #334155' }}>
           👤 Info Akun
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 14 }}>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <span style={{ color: '#94a3b8', width: 100 }}>Nama:</span>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{ color: '#94a3b8', minWidth: 100 }}>Nama:</span>
             <span style={{ fontWeight: 600 }}>{profile?.nama || '–'}</span>
           </div>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <span style={{ color: '#94a3b8', width: 100 }}>Email:</span>
-            <span style={{ fontFamily: 'monospace' }}>{profile?.email || '–'}</span>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{ color: '#94a3b8', minWidth: 100 }}>Email:</span>
+            <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{profile?.email || '–'}</span>
           </div>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <span style={{ color: '#94a3b8', width: 100 }}>Role:</span>
-            <span style={{ background: profile?.role === 'admin' ? '#dcfce7' : '#dbeafe', color: profile?.role === 'admin' ? '#14532d' : '#1e40af', padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{ color: '#94a3b8', minWidth: 100 }}>Role:</span>
+            <span style={{
+              background: profile?.role === 'admin' ? '#dcfce7' : '#dbeafe',
+              color: profile?.role === 'admin' ? '#14532d' : '#1e40af',
+              padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+            }}>
               {profile?.role === 'admin' ? '👑 Admin' : '🧑‍💼 Kasir'}
             </span>
           </div>
