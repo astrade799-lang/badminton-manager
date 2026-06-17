@@ -9,6 +9,17 @@ const font = Plus_Jakarta_Sans({
 export const metadata = {
   title: 'Badminton Manager',
   description: 'Aplikasi manajemen lapangan badminton',
+  icons: {
+    icon: '/icon-192.png',
+    apple: '/icon-192.png',
+  },
+  manifest: '/manifest.json',
+  themeColor: '#16a34a',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Badminton Manager',
+  },
 }
 
 export default function RootLayout({ children }) {
