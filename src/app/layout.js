@@ -21,7 +21,7 @@ export const metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Badminton Manager',
+    title: 'Garuda Takalala',
   },
 }
 
