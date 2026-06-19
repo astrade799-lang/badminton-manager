@@ -7,7 +7,7 @@ const font = Plus_Jakarta_Sans({
 })
 
 export const metadata = {
-  title: 'Badminton Manager',
+  title: 'Badminton Manager | Garuda Takalala',
   description: 'Aplikasi manajemen lapangan badminton',
   icons: {
     icon: [
