@@ -109,15 +109,8 @@ export default function Layout() {
   }
 
   if (authLoading) {
-    return (
-      <div style={{ minHeight: '100vh', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' }}>
-        <div style={{ textAlign: 'center', color: '#94a3b8' }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🏸</div>
-          <div>Memuat aplikasi...</div>
-        </div>
-      </div>
-    )
-  }
+  return <LoadingScreen />
+}
 
   if (!user) return <Login onLoginSuccess={setUser} />
 
@@ -187,6 +180,77 @@ export default function Layout() {
     </div>
   )
 }
+
+// ── LOADING SCREEN — dengan pesan progresif ──────────────────
+function LoadingScreen() {
+  const [detik, setDetik] = useState(0)
+
+  useEffect(() => {
+    const interval = setInterval(() => setDetik(d => d + 1), 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Pesan berubah sesuai lama loading — supaya user tahu app tidak hang
+  let pesan = 'Memuat aplikasi...'
+  let subpesan = ''
+  if (detik >= 5 && detik < 15) {
+    pesan = 'Menghubungkan ke server...'
+    subpesan = 'Mohon tunggu sebentar'
+  } else if (detik >= 15 && detik < 30) {
+    pesan = 'Server sedang bangun...'
+    subpesan = 'Ini terjadi saat pertama kali dibuka setelah lama tidak aktif'
+  } else if (detik >= 30) {
+    pesan = 'Hampir selesai...'
+    subpesan = 'Koneksi pertama memang lebih lama, setelah ini akan lebih cepat'
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', padding: 24 }}>
+      <div style={{ textAlign: 'center', maxWidth: 320 }}>
+        <div style={{
+          fontSize: 48, marginBottom: 20,
+          animation: 'bounce 1.5s ease-in-out infinite',
+        }}>🏸</div>
+
+        {/* Progress bar animasi */}
+        <div style={{ width: '100%', height: 4, background: '#1e293b', borderRadius: 4, overflow: 'hidden', marginBottom: 20 }}>
+          <div style={{
+            height: '100%', background: 'linear-gradient(90deg, #16a34a, #22c55e)',
+            width: '40%', borderRadius: 4,
+            animation: 'loading-slide 1.5s ease-in-out infinite',
+          }} />
+        </div>
+
+        <div style={{ color: '#f1f5f9', fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
+          {pesan}
+        </div>
+        {subpesan && (
+          <div style={{ color: '#94a3b8', fontSize: 13, lineHeight: 1.5 }}>
+            {subpesan}
+          </div>
+        )}
+
+        {detik >= 3 && (
+          <div style={{ color: '#475569', fontSize: 12, marginTop: 16, fontFamily: 'monospace' }}>
+            {detik}s
+          </div>
+        )}
+      </div>
+
+      <style jsx>{`
+        @keyframes bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        @keyframes loading-slide {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(350%); }
+        }
+      `}</style>
+    </div>
+  )
+}
+
 
 // Halaman Pengaturan
 function Pengaturan({ profile }) {
