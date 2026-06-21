@@ -26,6 +26,25 @@ function useIsMobile() {
   }, [])
   return isMobile
 }
+function getPresetRange(preset) {
+  const today = new Date()
+  const fmt = (d) => d.toISOString().split('T')[0]
+  if (preset === 'hari-ini') return { dari: fmt(today), sampai: fmt(today) }
+  if (preset === 'minggu-ini') {
+    const start = new Date(today); start.setDate(today.getDate() - today.getDay())
+    return { dari: fmt(start), sampai: fmt(today) }
+  }
+  if (preset === 'bulan-ini') {
+    const start = new Date(today.getFullYear(), today.getMonth(), 1)
+    return { dari: fmt(start), sampai: fmt(today) }
+  }
+  if (preset === 'bulan-lalu') {
+    const start = new Date(today.getFullYear(), today.getMonth()-1, 1)
+    const end   = new Date(today.getFullYear(), today.getMonth(), 0)
+    return { dari: fmt(start), sampai: fmt(end) }
+  }
+  return { dari:'', sampai:'' }
+}
 
 const panel = { background:'#1e293b', border:'1px solid #334155', borderRadius:12, overflow:'hidden', marginBottom:20 }
 const th = { padding:'11px 20px', textAlign:'left', fontSize:11, fontWeight:700, color:'#475569', textTransform:'uppercase', letterSpacing:'0.8px', borderBottom:'1px solid #334155' }
@@ -55,12 +74,14 @@ export default function Transaksi() {
   const [lapHarga, setLapHarga]     = useState('')
 
   const [filterTipe, setFilterTipe]       = useState('')
-  const [filterTanggal, setFilterTanggal] = useState('')
+  const [filterProduk, setFilterProduk]   = useState('')
+  const [tglDari, setTglDari]     = useState('')
+  const [tglSampai, setTglSampai] = useState('')
 
   async function muatData() {
     const [resProduk, resHistory] = await Promise.all([
       supabase.from('stok').select('*').order('nama'),
-      supabase.from('transaksi_stok').select('*, stok(nama, satuan_besar, satuan_kecil, isi_per_satuan)').order('created_at', { ascending:false }).limit(100),
+      supabase.from('transaksi_stok').select('*, stok(nama, satuan_besar, satuan_kecil, isi_per_satuan)').order('created_at', { ascending:false }).limit(200),
     ])
     if (!resProduk.error)  setProdukList(resProduk.data)
     if (!resHistory.error) setHistory(resHistory.data)
@@ -137,10 +158,31 @@ export default function Transaksi() {
     muatData()
   }
 
-  const historyFiltered = history.filter(t =>
-    (filterTipe === '' || t.tipe === filterTipe) &&
-    (filterTanggal === '' || t.tanggal === filterTanggal)
-  )
+  function terapkanPreset(preset) {
+    const r = getPresetRange(preset)
+    setTglDari(r.dari); setTglSampai(r.sampai)
+  }
+  function resetFilterHistory() {
+    setFilterTipe(''); setFilterProduk(''); setTglDari(''); setTglSampai('')
+  }
+
+  const historyFiltered = history.filter(t => {
+    const cocokTipe = filterTipe === '' || t.tipe === filterTipe
+    const cocokProduk = filterProduk === '' || (t.stok?.nama === filterProduk)
+    const cocokDari = tglDari === '' || (t.tanggal && t.tanggal >= tglDari)
+    const cocokSampai = tglSampai === '' || (t.tanggal && t.tanggal <= tglSampai)
+    return cocokTipe && cocokProduk && cocokDari && cocokSampai
+  })
+
+  const adaFilterAktif = filterTipe || filterProduk || tglDari || tglSampai
+
+  // Ringkasan total dari hasil filter
+  const totalJual  = historyFiltered.filter(t=>t.tipe==='jual').reduce((s,t)=>s+t.total,0)
+  const totalPakai = historyFiltered.filter(t=>t.tipe==='pakai').reduce((s,t)=>s+t.total,0)
+  const totalRestockNilai = historyFiltered.filter(t=>t.tipe==='restock').reduce((s,t)=>s+t.total,0)
+
+  // Daftar nama produk unik untuk filter dropdown
+  const namaProdukUnik = [...new Set(produkList.map(p => p.nama))].sort()
 
   const labelTipe = { jual:'🛒 Jual', pakai:'🏸 Lapangan', restock:'📥 Restock' }
   const warnaTipe = { jual:'#dcfce7', pakai:'#dbeafe', restock:'#fef3c7' }
@@ -159,7 +201,6 @@ export default function Transaksi() {
         <div style={{ fontSize:13, color:'#94a3b8' }}>Catat penjualan dan pemakaian lapangan</div>
       </div>
 
-      {/* Tab Navigation — scroll horizontal di mobile */}
       <div style={{ display:'flex', gap:8, marginBottom:isMobile?16:24, overflowX:'auto', paddingBottom:4 }}>
         {[
           { id:'jual',     label: isMobile?'🛒 Jual':'🛒 Jual Produk' },
@@ -179,7 +220,6 @@ export default function Transaksi() {
         <div style={panel}>
           <div style={{ padding:'16px 20px', borderBottom:'1px solid #334155', fontWeight:700, fontSize:15 }}>🛒 Catat Penjualan</div>
           <div style={{ padding:isMobile?16:20, display:'flex', flexDirection:'column', gap:16 }}>
-
             <div>
               <label style={lbl}>Pilih Produk</label>
               <select style={inp} value={jualProduk} onChange={e=>{setJualProduk(e.target.value);setJualHarga('');setJualJumlah('')}}>
@@ -214,12 +254,10 @@ export default function Transaksi() {
                     <input style={inp} type="number" min="1" placeholder={`cth: 2 ${jualSatuan==='besar'?produkJual.satuan_besar:produkJual.satuan_kecil}`} value={jualJumlah} onChange={e=>setJualJumlah(e.target.value)} />
                     {jualJumlah > 0 && jualSatuan==='besar' && <div style={{ marginTop:6, fontSize:12, color:'#4ade80', fontFamily:'monospace' }}>= {jualJmlPcs} {produkJual.satuan_kecil}</div>}
                   </div>
-
                   <div>
                     <label style={lbl}>Harga / {jualSatuan==='besar'?produkJual.satuan_besar:produkJual.satuan_kecil} <span style={{color:'#475569',fontWeight:400}}>(default: {formatRupiah(jualHargaDefault)})</span></label>
                     <input style={inp} type="number" placeholder={`Default: ${jualHargaDefault}`} value={jualHarga} onChange={e=>setJualHarga(e.target.value)} />
                   </div>
-
                   <div>
                     <label style={lbl}>Diskon (Rp) <span style={{color:'#475569',fontWeight:400}}>— opsional</span></label>
                     <input style={inp} type="number" min="0" placeholder="0" value={jualDiskon} onChange={e=>setJualDiskon(e.target.value)} />
@@ -257,7 +295,6 @@ export default function Transaksi() {
         <div style={panel}>
           <div style={{ padding:'16px 20px', borderBottom:'1px solid #334155', fontWeight:700, fontSize:15 }}>🏸 Catat Pemakaian Lapangan</div>
           <div style={{ padding:isMobile?16:20, display:'flex', flexDirection:'column', gap:16 }}>
-
             <div>
               <label style={lbl}>Sesi</label>
               <div style={{ display:'flex', gap:8 }}>
@@ -267,7 +304,6 @@ export default function Transaksi() {
                 ))}
               </div>
             </div>
-
             <div>
               <label style={lbl}>Pilih Produk</label>
               <select style={inp} value={lapProduk} onChange={e=>{setLapProduk(e.target.value);setLapHarga('');setLapJumlah('')}}>
@@ -330,28 +366,83 @@ export default function Transaksi() {
       {/* TAB: HISTORY */}
       {tab === 'history' && (
         <div>
-          <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
-            <select style={{ ...inp, width: isMobile?'48%':'auto' }} value={filterTipe} onChange={e=>setFilterTipe(e.target.value)}>
-              <option value="">Semua Tipe</option>
-              <option value="jual">🛒 Jual</option>
-              <option value="pakai">🏸 Lapangan</option>
-              <option value="restock">📥 Restock</option>
-            </select>
-            <input style={{ ...inp, width: isMobile?'48%':'auto' }} type="date" value={filterTanggal} onChange={e=>setFilterTanggal(e.target.value)} />
-            {(filterTipe || filterTanggal) && (
-              <button style={btnS} onClick={()=>{setFilterTipe('');setFilterTanggal('')}}>✕ Reset</button>
-            )}
-            <span style={{ marginLeft: isMobile?0:'auto', fontSize:13, color:'#94a3b8', alignSelf:'center' }}>{historyFiltered.length} transaksi</span>
+          {/* ── FILTER PANEL ── */}
+          <div style={{ ...panel, marginBottom:16 }}>
+            <div style={{ padding:isMobile?14:16 }}>
+
+              <div style={{ display:'flex', gap:10, marginBottom:12, flexWrap:'wrap' }}>
+                <select style={{ ...inp, width: isMobile?'48%':'auto' }} value={filterTipe} onChange={e=>setFilterTipe(e.target.value)}>
+                  <option value="">Semua Tipe</option>
+                  <option value="jual">🛒 Jual</option>
+                  <option value="pakai">🏸 Lapangan</option>
+                  <option value="restock">📥 Restock</option>
+                </select>
+                <select style={{ ...inp, width: isMobile?'48%':'auto', flex: isMobile?'none':1 }} value={filterProduk} onChange={e=>setFilterProduk(e.target.value)}>
+                  <option value="">Semua Produk</option>
+                  {namaProdukUnik.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+
+              {/* Preset cepat */}
+              <div style={{ display:'flex', gap:6, marginBottom:12, flexWrap:'wrap' }}>
+                {[
+                  { id:'hari-ini',   l:'Hari Ini' },
+                  { id:'minggu-ini', l:'Minggu Ini' },
+                  { id:'bulan-ini',  l:'Bulan Ini' },
+                  { id:'bulan-lalu', l:'Bulan Lalu' },
+                ].map(p => (
+                  <button key={p.id} style={{ padding:'5px 12px', borderRadius:20, background:'#334155', color:'#f1f5f9', border:'none', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}
+                    onClick={()=>terapkanPreset(p.id)}>{p.l}</button>
+                ))}
+              </div>
+
+              {/* Rentang tanggal */}
+              <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
+                <div style={{ flex: isMobile?'1 1 100%':1, minWidth:140 }}>
+                  <label style={{ ...lbl, marginBottom:4, fontSize:11 }}>Dari Tanggal</label>
+                  <input style={inp} type="date" value={tglDari} onChange={e=>setTglDari(e.target.value)} />
+                </div>
+                <div style={{ flex: isMobile?'1 1 100%':1, minWidth:140 }}>
+                  <label style={{ ...lbl, marginBottom:4, fontSize:11 }}>Sampai Tanggal</label>
+                  <input style={inp} type="date" value={tglSampai} onChange={e=>setTglSampai(e.target.value)} />
+                </div>
+                {adaFilterAktif && (
+                  <button style={{ ...btnS, alignSelf:isMobile?'stretch':'flex-end', marginTop:isMobile?0:20 }} onClick={resetFilterHistory}>✕ Reset</button>
+                )}
+              </div>
+            </div>
           </div>
 
+          {/* Ringkasan total hasil filter */}
+          {adaFilterAktif && historyFiltered.length > 0 && (
+            <div style={{ display:'grid', gridTemplateColumns: isMobile?'1fr 1fr':'1fr 1fr 1fr', gap:10, marginBottom:16 }}>
+              <div style={{ background:'#1e293b', border:'1px solid #334155', borderRadius:10, padding:12 }}>
+                <div style={{ fontSize:11, color:'#94a3b8', marginBottom:4 }}>🛒 Total Jual</div>
+                <div style={{ fontSize:15, fontWeight:700, fontFamily:'monospace', color:'#4ade80' }}>{formatRupiah(totalJual)}</div>
+              </div>
+              <div style={{ background:'#1e293b', border:'1px solid #334155', borderRadius:10, padding:12 }}>
+                <div style={{ fontSize:11, color:'#94a3b8', marginBottom:4 }}>🏸 Total Lapangan</div>
+                <div style={{ fontSize:15, fontWeight:700, fontFamily:'monospace', color:'#c4b5fd' }}>{formatRupiah(totalPakai)}</div>
+              </div>
+              <div style={{ background:'#1e293b', border:'1px solid #334155', borderRadius:10, padding:12, gridColumn: isMobile?'span 2':'auto' }}>
+                <div style={{ fontSize:11, color:'#94a3b8', marginBottom:4 }}>📥 Total Restock</div>
+                <div style={{ fontSize:15, fontWeight:700, fontFamily:'monospace', color:'#f59e0b' }}>{formatRupiah(totalRestockNilai)}</div>
+              </div>
+            </div>
+          )}
+
           <div style={panel}>
+            <div style={{ padding:'16px 20px', borderBottom:'1px solid #334155', display:'flex', justifyContent:'space-between' }}>
+              <span style={{ fontWeight:700, fontSize:15 }}>Riwayat Transaksi</span>
+              <span style={{ fontSize:13, color:'#94a3b8' }}>{historyFiltered.length} transaksi</span>
+            </div>
+
             {historyFiltered.length === 0 ? (
               <div style={{ textAlign:'center', padding:48, color:'#94a3b8' }}>
                 <div style={{ fontSize:48, marginBottom:12 }}>📋</div>
-                <p>Belum ada transaksi.</p>
+                <p>{adaFilterAktif ? 'Tidak ada transaksi yang cocok dengan filter.' : 'Belum ada transaksi.'}</p>
               </div>
             ) : isMobile ? (
-              /* ── MOBILE: CARD LIST ── */
               <div>
                 {historyFiltered.map(t => (
                   <div key={t.id} style={{ padding:'12px 16px', borderBottom:'1px solid rgba(51,65,85,0.5)' }}>
@@ -375,7 +466,6 @@ export default function Transaksi() {
                 ))}
               </div>
             ) : (
-              /* ── DESKTOP: TABEL ── */
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
                 <thead>
                   <tr>{['Tanggal','Produk','Tipe','Jumlah','Harga','Diskon','Total','Keterangan'].map(h=><th key={h} style={th}>{h}</th>)}</tr>

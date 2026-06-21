@@ -34,3 +34,10 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+##🔜 Sisa Pengembangan
+1. Kelola User di dalam app
+2. Role Pemain + halaman khusus
+3. Match Management
+4. Grafik/Chart
+5. Migrasi hosting (kalau mau private repo)

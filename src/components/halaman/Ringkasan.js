@@ -12,6 +12,14 @@ function formatTanggal(t) {
   })
 }
 function hariIni() { return new Date().toISOString().split('T')[0] }
+function tampilStok(stok_pcs, isi, satuan_besar, satuan_kecil) {
+  if (!isi || isi <= 0) return `${stok_pcs} ${satuan_kecil}`
+  const besar = Math.floor(stok_pcs / isi)
+  const sisa  = stok_pcs % isi
+  if (besar === 0) return `${sisa} ${satuan_kecil}`
+  if (sisa === 0)  return `${besar} ${satuan_besar}`
+  return `${besar} ${satuan_besar} ${sisa} ${satuan_kecil}`
+}
 function statusStok(n) {
   if (n === 0) return { label: 'Habis',   warna: '#fee2e2', teks: '#991b1b' }
   if (n <= 5)  return { label: 'Menipis', warna: '#fef3c7', teks: '#92400e' }
@@ -38,20 +46,23 @@ export default function Ringkasan() {
   const [kas, setKas]         = useState([])
   const [hutang, setHutang]   = useState([])
   const [stok, setStok]       = useState([])
+  const [trx, setTrx]         = useState([])
   const [loading, setLoading] = useState(true)
   const isMobile = useIsMobile()
 
   useEffect(() => {
     async function muatSemua() {
       setLoading(true)
-      const [resKas, resHutang, resStok] = await Promise.all([
+      const [resKas, resHutang, resStok, resTrx] = await Promise.all([
         supabase.from('kas').select('*').order('tanggal', { ascending: false }),
         supabase.from('hutang').select('*').order('created_at', { ascending: false }),
         supabase.from('stok').select('*'),
+        supabase.from('transaksi_stok').select('*, stok(nama, kategori)').order('tanggal', { ascending: false }),
       ])
       if (!resKas.error)    setKas(resKas.data)
       if (!resHutang.error) setHutang(resHutang.data)
       if (!resStok.error)   setStok(resStok.data)
+      if (!resTrx.error)    setTrx(resTrx.data)
       setLoading(false)
     }
     muatSemua()
@@ -62,10 +73,23 @@ export default function Ringkasan() {
   const saldo       = totalMasuk - totalKeluar
   const bulanIni    = hariIni().substring(0,7)
   const masukBulanIni = kas.filter(t=>t.jenis==='masuk'&&t.tanggal&&t.tanggal.startsWith(bulanIni)).reduce((s,t)=>s+t.nominal,0)
+
   const totalSisaHutang = hutang.reduce((s,h)=>s+Math.max(0,h.total_hutang-h.sudah_bayar),0)
   const hutangAktif     = hutang.filter(h=>statusHutang(h.total_hutang,h.sudah_bayar).label!=='Lunas')
   const stokBermasalah  = stok.filter(p=>statusStok(p.stok_pcs).label!=='Aman')
   const kasRecent       = kas.slice(0,5)
+
+  // ── Shuttlecock — semua produk bertipe shuttle ────────────
+  const shuttleList = stok.filter(p => p.tipe_produk === 'shuttle')
+
+  // ── Penjualan bulan ini (dari transaksi_stok, tipe jual + pakai) ──
+  const trxBulanIni = trx.filter(t => t.tanggal && t.tanggal.startsWith(bulanIni))
+  const jualBulanIni  = trxBulanIni.filter(t => t.tipe === 'jual')
+  const pakaiBulanIni = trxBulanIni.filter(t => t.tipe === 'pakai')
+  const totalJualBulanIni  = jualBulanIni.reduce((s,t) => s + t.total, 0)
+  const totalPakaiBulanIni = pakaiBulanIni.reduce((s,t) => s + t.total, 0)
+  const pcsTerjualBulanIni = jualBulanIni.reduce((s,t) => s + t.jumlah_pcs, 0)
+  const pcsPakaiBulanIni   = pakaiBulanIni.reduce((s,t) => s + t.jumlah_pcs, 0)
 
   if (loading) return (
     <div style={{textAlign:'center',padding:80,color:'#94a3b8'}}>
@@ -81,9 +105,6 @@ export default function Ringkasan() {
     { label:'📈 Pemasukan',    nilai:formatRupiah(masukBulanIni),       warna:'#2563eb', sub:new Date().toLocaleDateString('id-ID',{month:'long',year:'numeric'}), subWarna:'#94a3b8' },
   ]
 
-  const thStyle = { padding:'10px 16px', textAlign:'left', fontSize:11, fontWeight:700, color:'#475569', textTransform:'uppercase', letterSpacing:'0.8px', borderBottom:'1px solid #334155' }
-  const tdStyle = { padding:'11px 16px', borderBottom:'1px solid rgba(51,65,85,0.5)', verticalAlign:'middle' }
-
   return (
     <div>
       {/* Header */}
@@ -94,7 +115,7 @@ export default function Ringkasan() {
         </div>
       </div>
 
-      {/* Kartu 2x2 mobile, 4x1 desktop */}
+      {/* Kartu utama */}
       <div style={{display:'grid',gridTemplateColumns:isMobile?'repeat(2,1fr)':'repeat(4,1fr)',gap:isMobile?10:16,marginBottom:isMobile?16:28}}>
         {kartuData.map((k,i)=>(
           <div key={i} style={{background:'#1e293b',border:'1px solid #334155',borderRadius:isMobile?10:12,padding:isMobile?'12px':'20px',position:'relative',overflow:'hidden'}}>
@@ -104,6 +125,55 @@ export default function Ringkasan() {
             <div style={{fontSize:isMobile?11:12,color:k.subWarna,lineHeight:1.3}}>{k.sub}</div>
           </div>
         ))}
+      </div>
+
+      {/* ── BARU: Sisa Stok Shuttlecock ── */}
+      <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:12,overflow:'hidden',marginBottom:isMobile?12:20}}>
+        <div style={{padding:'14px 16px',borderBottom:'1px solid #334155',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <span style={{fontWeight:700,fontSize:14}}>🏸 Stok Shuttlecock</span>
+          <span style={{fontSize:12,color:'#94a3b8'}}>{shuttleList.length} merk</span>
+        </div>
+        {shuttleList.length === 0 ? (
+          <div style={{textAlign:'center',padding:24,color:'#475569',fontSize:13}}>Belum ada produk shuttlecock</div>
+        ) : (
+          <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'repeat(3,1fr)',gap:0}}>
+            {shuttleList.map((p,i) => {
+              const s = statusStok(p.stok_pcs)
+              return (
+                <div key={p.id} style={{
+                  padding:'12px 16px',
+                  borderBottom: isMobile || Math.floor(i/3) < Math.floor((shuttleList.length-1)/3) ? '1px solid rgba(51,65,85,0.5)' : 'none',
+                  borderRight: !isMobile && (i+1)%3!==0 ? '1px solid rgba(51,65,85,0.5)' : 'none',
+                  display:'flex', justifyContent:'space-between', alignItems:'center',
+                }}>
+                  <div>
+                    <div style={{fontWeight:600,fontSize:13}}>{p.nama}</div>
+                    <div style={{fontFamily:'monospace',fontSize:13,color:'#4ade80',marginTop:3}}>
+                      {tampilStok(p.stok_pcs, p.isi_per_satuan, p.satuan_besar, p.satuan_kecil)}
+                    </div>
+                  </div>
+                  <span style={{background:s.warna,color:s.teks,padding:'2px 8px',borderRadius:20,fontSize:10,fontWeight:700,flexShrink:0}}>{s.label}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── BARU: Penjualan Bulan Ini ── */}
+      <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr 1fr':'1fr 1fr',gap:isMobile?10:16,marginBottom:isMobile?12:20}}>
+        <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:12,padding:isMobile?14:18,position:'relative',overflow:'hidden'}}>
+          <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'#16a34a'}}/>
+          <div style={{fontSize:11,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:0.3,marginBottom:8}}>🛒 Jual Bulan Ini</div>
+          <div style={{fontSize:isMobile?16:20,fontWeight:800,fontFamily:'monospace',color:'#4ade80',marginBottom:4}}>{formatRupiah(totalJualBulanIni)}</div>
+          <div style={{fontSize:12,color:'#94a3b8'}}>{jualBulanIni.length} transaksi · {pcsTerjualBulanIni} pcs</div>
+        </div>
+        <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:12,padding:isMobile?14:18,position:'relative',overflow:'hidden'}}>
+          <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'#7c3aed'}}/>
+          <div style={{fontSize:11,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:0.3,marginBottom:8}}>🏸 Lapangan Bulan Ini</div>
+          <div style={{fontSize:isMobile?16:20,fontWeight:800,fontFamily:'monospace',color:'#c4b5fd',marginBottom:4}}>{formatRupiah(totalPakaiBulanIni)}</div>
+          <div style={{fontSize:12,color:'#94a3b8'}}>{pakaiBulanIni.length} sesi · {pcsPakaiBulanIni} pcs</div>
+        </div>
       </div>
 
       {/* Panel bawah */}

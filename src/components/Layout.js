@@ -190,7 +190,6 @@ function LoadingScreen() {
     return () => clearInterval(interval)
   }, [])
 
-  // Pesan berubah sesuai lama loading — supaya user tahu app tidak hang
   let pesan = 'Memuat aplikasi...'
   let subpesan = ''
   if (detik >= 5 && detik < 15) {
@@ -207,17 +206,16 @@ function LoadingScreen() {
   return (
     <div style={{ minHeight: '100vh', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', padding: 24 }}>
       <div style={{ textAlign: 'center', maxWidth: 320 }}>
-        <div style={{
-          fontSize: 48, marginBottom: 20,
-          animation: 'bounce 1.5s ease-in-out infinite',
-        }}>🏸</div>
+        <div style={{ fontSize: 48, marginBottom: 20 }}>🏸</div>
 
-        {/* Progress bar animasi */}
+        {/* Progress bar — pakai CSS transition biasa, tanpa keyframes */}
         <div style={{ width: '100%', height: 4, background: '#1e293b', borderRadius: 4, overflow: 'hidden', marginBottom: 20 }}>
           <div style={{
-            height: '100%', background: 'linear-gradient(90deg, #16a34a, #22c55e)',
-            width: '40%', borderRadius: 4,
-            animation: 'loading-slide 1.5s ease-in-out infinite',
+            height: '100%',
+            background: 'linear-gradient(90deg, #16a34a, #22c55e)',
+            width: `${Math.min(90, 20 + detik * 3)}%`,
+            borderRadius: 4,
+            transition: 'width 1s ease-out',
           }} />
         </div>
 
@@ -236,17 +234,6 @@ function LoadingScreen() {
           </div>
         )}
       </div>
-
-      <style jsx>{`
-        @keyframes bounce {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-10px); }
-        }
-        @keyframes loading-slide {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(350%); }
-        }
-      `}</style>
     </div>
   )
 }
