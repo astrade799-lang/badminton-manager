@@ -10,6 +10,7 @@ import Transaksi from './halaman/Transaksi'
 import Hutang from './halaman/Hutang'
 import Kas from './halaman/Kas'
 import Export from './halaman/Export'
+import Match from './halaman/Match'
 
 export default function Layout() {
   const [user, setUser]       = useState(null)
@@ -71,6 +72,7 @@ export default function Layout() {
     { id: 'ringkasan',  label: 'Ringkasan',       ikon: '📊' },
     { id: 'stok',       label: 'Stok',             ikon: '📦' },
     { id: 'transaksi',  label: 'Transaksi',        ikon: '🛒' },
+    { id: 'match',      label: 'Match',            ikon: '🏸' },
     { id: 'hutang',     label: 'Hutang',           ikon: '💳' },
     { id: 'kas',        label: 'Kas',              ikon: '💰' },
     { id: 'export',     label: 'Export',           ikon: '📤' },
@@ -81,6 +83,7 @@ export default function Layout() {
     { id: 'ringkasan',  label: 'Ringkasan',       ikon: '📊' },
     { id: 'stok',       label: 'Stok',            ikon: '📦' },
     { id: 'transaksi',  label: 'Transaksi',       ikon: '🛒' },
+    { id: 'match',      label: 'Match',           ikon: '🏸' },
     { id: 'hutang',     label: 'Hutang',          ikon: '💳' },
     { id: 'kas',        label: 'Kas',             ikon: '💰' },
   ]
@@ -91,7 +94,7 @@ export default function Layout() {
   const menuMobile = [
     { id: 'ringkasan',  label: 'Beranda',    ikon: '📊' },
     { id: 'transaksi',  label: 'Transaksi',  ikon: '🛒' },
-    { id: 'stok',       label: 'Stok',       ikon: '📦' },
+    { id: 'match',      label: 'Match',      ikon: '🏸' },
     { id: 'hutang',     label: 'Hutang',     ikon: '💳' },
     { id: 'kas',        label: 'Kas',        ikon: '💰' },
   ]
@@ -100,6 +103,7 @@ export default function Layout() {
     ringkasan:  <Ringkasan />,
     stok:       <Stok isAdmin={isAdmin} />,
     transaksi:  <Transaksi />,
+    match:      <Match />,
     hutang:     <Hutang />,
     kas:        <Kas />,
     ...(isAdmin && {
@@ -238,6 +242,8 @@ function LoadingScreen() {
   )
 }
 
+// ── HELPER (lokal untuk section Harga Paket Bola) ──────────────────
+function formatRupiah(n) { return 'Rp ' + Number(n || 0).toLocaleString('id-ID') }
 
 // Halaman Pengaturan
 function Pengaturan({ profile }) {
@@ -247,7 +253,7 @@ function Pengaturan({ profile }) {
         <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.5, marginBottom: 4 }}>⚙️ Pengaturan</div>
         <div style={{ fontSize: 14, color: '#94a3b8' }}>Kelola akun dan pengaturan aplikasi</div>
       </div>
-      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24 }}>
+      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, marginBottom: 20 }}>
         <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid #334155' }}>
           👤 Info Akun
         </div>
@@ -272,6 +278,150 @@ function Pengaturan({ profile }) {
           </div>
         </div>
       </div>
+
+      <HargaPaketBola />
+    </div>
+  )
+}
+
+// ── SECTION: Harga Paket Bola ──────────────────
+// CRUD sederhana untuk tabel paket_harga_bola. Karena harga diatur PER JUMLAH BOLA SPESIFIK
+// (bukan rentang), tiap baris disimpan dengan min_bola = max_bola = jumlah bola itu sendiri.
+// Ini supaya fungsi cariPaketHarga() yang sudah dipakai di Match.js tetap berfungsi tanpa diubah.
+function HargaPaketBola() {
+  const [daftar, setDaftar]   = useState([])
+  const [loading, setLoading] = useState(true)
+  const [pesan, setPesan]     = useState(null)
+
+  // Form tambah baru
+  const [showForm, setShowForm] = useState(false)
+  const [formBola, setFormBola]   = useState('')
+  const [formHarga, setFormHarga] = useState('')
+
+  // Edit inline per baris
+  const [editId, setEditId]       = useState(null)
+  const [editHarga, setEditHarga] = useState('')
+
+  function tampilPesan(teks) { setPesan(teks); setTimeout(() => setPesan(null), 3000) }
+
+  async function muatData() {
+    setLoading(true)
+    const { data, error } = await supabase.from('paket_harga_bola').select('*').order('min_bola')
+    if (!error) setDaftar(data)
+    setLoading(false)
+  }
+  useEffect(() => { muatData() }, [])
+
+  async function simpanBaru() {
+    const bola = parseInt(formBola) || 0
+    const harga = parseInt(formHarga) || 0
+    if (bola <= 0) { tampilPesan('⚠️ Jumlah bola harus lebih dari 0!'); return }
+    if (harga <= 0) { tampilPesan('⚠️ Harga harus lebih dari 0!'); return }
+    if (daftar.some(p => p.min_bola === bola)) { tampilPesan(`⚠️ Harga untuk ${bola} bola sudah ada!`); return }
+
+    const urutanBaru = daftar.length > 0 ? Math.max(...daftar.map(p => p.urutan || 0)) + 1 : 1
+    const { error } = await supabase.from('paket_harga_bola').insert([{
+      label: `${bola} Bola`,
+      min_bola: bola,
+      max_bola: bola,
+      harga: harga,
+      urutan: urutanBaru,
+    }])
+    if (error) { tampilPesan('❌ ' + error.message); return }
+
+    tampilPesan(`✅ Harga untuk ${bola} bola ditambahkan!`)
+    setFormBola(''); setFormHarga(''); setShowForm(false)
+    muatData()
+  }
+
+  function bukaEdit(item) {
+    setEditId(item.id)
+    setEditHarga(String(item.harga))
+  }
+
+  async function simpanEdit() {
+    const harga = parseInt(editHarga) || 0
+    if (harga <= 0) { tampilPesan('⚠️ Harga harus lebih dari 0!'); return }
+    const { error } = await supabase.from('paket_harga_bola').update({ harga }).eq('id', editId)
+    if (error) { tampilPesan('❌ ' + error.message); return }
+    tampilPesan('✅ Harga diperbarui!')
+    setEditId(null)
+    muatData()
+  }
+
+  async function hapus(item) {
+    if (!confirm(`Hapus harga untuk ${item.label}?`)) return
+    const { error } = await supabase.from('paket_harga_bola').delete().eq('id', item.id)
+    if (error) { tampilPesan('❌ ' + error.message); return }
+    tampilPesan('🗑️ Dihapus')
+    muatData()
+  }
+
+  const inp = { background:'#0f172a', border:'1px solid #334155', borderRadius:8, color:'#f1f5f9', fontFamily:'inherit', fontSize:14, padding:'8px 12px', outline:'none', width:'100%' }
+  const lbl = { fontSize:12, fontWeight:600, color:'#94a3b8', display:'block', marginBottom:4 }
+  const btnG = { padding:'7px 14px', borderRadius:8, background:'#16a34a', color:'white', border:'none', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }
+  const btnS = { padding:'7px 14px', borderRadius:8, background:'#334155', color:'#f1f5f9', border:'1px solid #475569', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }
+  const btnR = { padding:'5px 10px', borderRadius:6, background:'#dc2626', color:'white', border:'none', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }
+
+  return (
+    <div style={{ background:'#1e293b', border:'1px solid #334155', borderRadius:12, overflow:'hidden' }}>
+      <div style={{ padding:'16px 24px', borderBottom:'1px solid #334155', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
+        <div>
+          <div style={{ fontWeight:700, fontSize:15 }}>🏸 Harga Paket Bola</div>
+          <div style={{ fontSize:12, color:'#94a3b8', marginTop:2 }}>Saran harga otomatis di halaman Match, berdasarkan jumlah bola per pemain</div>
+        </div>
+        <button style={btnG} onClick={() => setShowForm(!showForm)}>
+          {showForm ? '✕ Tutup' : '➕ Tambah'}
+        </button>
+      </div>
+
+      {pesan && (
+        <div style={{ padding:'10px 24px', background:'#0f172a', fontSize:13, fontWeight:600 }}>{pesan}</div>
+      )}
+
+      {showForm && (
+        <div style={{ padding:'16px 24px', background:'#0f172a', display:'flex', gap:12, alignItems:'flex-end', flexWrap:'wrap', borderBottom:'1px solid #334155' }}>
+          <div style={{ flex:'1 1 140px' }}>
+            <label style={lbl}>Jumlah Bola</label>
+            <input style={inp} type="number" min="1" max="20" placeholder="cth: 5" value={formBola} onChange={e => setFormBola(e.target.value)} />
+          </div>
+          <div style={{ flex:'1 1 160px' }}>
+            <label style={lbl}>Harga (Rp)</label>
+            <input style={inp} type="number" min="0" placeholder="cth: 30000" value={formHarga} onChange={e => setFormHarga(e.target.value)} />
+          </div>
+          <button style={btnG} onClick={simpanBaru}>💾 Simpan</button>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ textAlign:'center', padding:32, color:'#94a3b8', fontSize:13 }}>Memuat data...</div>
+      ) : daftar.length === 0 ? (
+        <div style={{ textAlign:'center', padding:32, color:'#94a3b8', fontSize:13 }}>Belum ada harga paket bola. Klik "Tambah" untuk mulai.</div>
+      ) : (
+        <div>
+          {daftar.map(item => (
+            <div key={item.id} style={{ padding:'12px 24px', borderBottom:'1px solid rgba(51,65,85,0.5)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+              <div style={{ fontWeight:600, fontSize:14, minWidth:90 }}>{item.label}</div>
+
+              {editId === item.id ? (
+                <div style={{ display:'flex', gap:8, alignItems:'center', flex:1 }}>
+                  <input style={{ ...inp, maxWidth:160 }} type="number" min="0" value={editHarga} onChange={e => setEditHarga(e.target.value)} autoFocus />
+                  <button style={btnG} onClick={simpanEdit}>💾</button>
+                  <button style={btnS} onClick={() => setEditId(null)}>✕</button>
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontFamily:'monospace', fontSize:14, color:'#4ade80', flex:1 }}>{formatRupiah(item.harga)}</div>
+                  <div style={{ display:'flex', gap:6 }}>
+                    <button style={{ ...btnS, padding:'5px 10px', fontSize:12 }} onClick={() => bukaEdit(item)}>✏️ Edit</button>
+                    <button style={btnR} onClick={() => hapus(item)}>🗑️</button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
