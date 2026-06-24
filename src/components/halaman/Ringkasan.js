@@ -42,7 +42,8 @@ function useIsMobile() {
   return isMobile
 }
 
-export default function Ringkasan() {
+// onNavigate: fungsi opsional dari Layout.js untuk pindah halaman (setAktif).
+export default function Ringkasan({ onNavigate }) {
   const [kas, setKas]         = useState([])
   const [hutang, setHutang]   = useState([])
   const [stok, setStok]       = useState([])
@@ -79,10 +80,8 @@ export default function Ringkasan() {
   const stokBermasalah  = stok.filter(p=>statusStok(p.stok_pcs).label!=='Aman')
   const kasRecent       = kas.slice(0,5)
 
-  // ── Shuttlecock — semua produk bertipe shuttle ────────────
   const shuttleList = stok.filter(p => p.tipe_produk === 'shuttle')
 
-  // ── Penjualan bulan ini (dari transaksi_stok, tipe jual + pakai) ──
   const trxBulanIni = trx.filter(t => t.tanggal && t.tanggal.startsWith(bulanIni))
   const jualBulanIni  = trxBulanIni.filter(t => t.tipe === 'jual')
   const pakaiBulanIni = trxBulanIni.filter(t => t.tipe === 'pakai')
@@ -107,7 +106,6 @@ export default function Ringkasan() {
 
   return (
     <div>
-      {/* Header */}
       <div style={{marginBottom:isMobile?16:24}}>
         <div style={{fontSize:isMobile?20:24,fontWeight:800,letterSpacing:-0.5,marginBottom:4}}>📊 Ringkasan Bisnis</div>
         <div style={{fontSize:13,color:'#94a3b8'}}>
@@ -115,7 +113,18 @@ export default function Ringkasan() {
         </div>
       </div>
 
-      {/* Kartu utama */}
+      {/* ── Shortcut cepat — terutama berguna di mobile karena beberapa halaman tidak ada di bottom nav ── */}
+      {onNavigate && (
+        <div style={{display:'flex',gap:8,marginBottom:isMobile?16:20,flexWrap:'wrap'}}>
+          <button
+            onClick={() => onNavigate('pemain')}
+            style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',borderRadius:8,background:'#1e293b',border:'1px solid #334155',color:'#f1f5f9',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}
+          >
+            🧑‍🤝‍🧑 Kelola Pemain
+          </button>
+        </div>
+      )}
+
       <div style={{display:'grid',gridTemplateColumns:isMobile?'repeat(2,1fr)':'repeat(4,1fr)',gap:isMobile?10:16,marginBottom:isMobile?16:28}}>
         {kartuData.map((k,i)=>(
           <div key={i} style={{background:'#1e293b',border:'1px solid #334155',borderRadius:isMobile?10:12,padding:isMobile?'12px':'20px',position:'relative',overflow:'hidden'}}>
@@ -127,7 +136,6 @@ export default function Ringkasan() {
         ))}
       </div>
 
-      {/* ── BARU: Sisa Stok Shuttlecock ── */}
       <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:12,overflow:'hidden',marginBottom:isMobile?12:20}}>
         <div style={{padding:'14px 16px',borderBottom:'1px solid #334155',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span style={{fontWeight:700,fontSize:14}}>🏸 Stok Shuttlecock</span>
@@ -160,7 +168,6 @@ export default function Ringkasan() {
         )}
       </div>
 
-      {/* ── BARU: Penjualan Bulan Ini ── */}
       <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr 1fr':'1fr 1fr',gap:isMobile?10:16,marginBottom:isMobile?12:20}}>
         <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:12,padding:isMobile?14:18,position:'relative',overflow:'hidden'}}>
           <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'#16a34a'}}/>
@@ -176,10 +183,7 @@ export default function Ringkasan() {
         </div>
       </div>
 
-      {/* Panel bawah */}
       <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'1fr 1fr',gap:isMobile?12:20}}>
-
-        {/* Transaksi Terakhir */}
         <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:12,overflow:'hidden'}}>
           <div style={{padding:'14px 16px',borderBottom:'1px solid #334155',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <span style={{fontWeight:700,fontSize:14}}>Transaksi Terakhir</span>
@@ -209,7 +213,6 @@ export default function Ringkasan() {
           )}
         </div>
 
-        {/* Hutang Aktif */}
         <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:12,overflow:'hidden'}}>
           <div style={{padding:'14px 16px',borderBottom:'1px solid #334155',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <span style={{fontWeight:700,fontSize:14}}>Hutang Aktif</span>
@@ -240,7 +243,6 @@ export default function Ringkasan() {
         </div>
       </div>
 
-      {/* Stok Bermasalah */}
       {stokBermasalah.length>0 && (
         <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:12,overflow:'hidden',marginTop:isMobile?12:20}}>
           <div style={{padding:'14px 16px',borderBottom:'1px solid #334155',display:'flex',justifyContent:'space-between'}}>

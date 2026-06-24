@@ -11,6 +11,7 @@ import Hutang from './halaman/Hutang'
 import Kas from './halaman/Kas'
 import Export from './halaman/Export'
 import Match from './halaman/Match'
+import Pemain from './halaman/Pemain'
 
 export default function Layout() {
   const [user, setUser]       = useState(null)
@@ -18,6 +19,7 @@ export default function Layout() {
   const [aktif, setAktif]     = useState('ringkasan')
   const [authLoading, setAuthLoading] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
+  const [showMenuLainnya, setShowMenuLainnya] = useState(false)
 
   // Deteksi mobile
   useEffect(() => {
@@ -73,6 +75,7 @@ export default function Layout() {
     { id: 'stok',       label: 'Stok',             ikon: '📦' },
     { id: 'transaksi',  label: 'Transaksi',        ikon: '🛒' },
     { id: 'match',      label: 'Match',            ikon: '🏸' },
+    { id: 'pemain',     label: 'Pemain',           ikon: '🧑‍🤝‍🧑' },
     { id: 'hutang',     label: 'Hutang',           ikon: '💳' },
     { id: 'kas',        label: 'Kas',              ikon: '💰' },
     { id: 'export',     label: 'Export',           ikon: '📤' },
@@ -84,26 +87,42 @@ export default function Layout() {
     { id: 'stok',       label: 'Stok',            ikon: '📦' },
     { id: 'transaksi',  label: 'Transaksi',       ikon: '🛒' },
     { id: 'match',      label: 'Match',           ikon: '🏸' },
+    { id: 'pemain',     label: 'Pemain',          ikon: '🧑‍🤝‍🧑' },
     { id: 'hutang',     label: 'Hutang',          ikon: '💳' },
     { id: 'kas',        label: 'Kas',             ikon: '💰' },
   ]
 
   const menus = isAdmin ? menuAdmin : menuKasir
 
-  // Menu yang tampil di bottom nav mobile (max 5)
+  // Menu yang tampil di bottom nav mobile (4 menu inti + 1 tombol "Lainnya")
   const menuMobile = [
     { id: 'ringkasan',  label: 'Beranda',    ikon: '📊' },
     { id: 'transaksi',  label: 'Transaksi',  ikon: '🛒' },
     { id: 'match',      label: 'Match',      ikon: '🏸' },
-    { id: 'hutang',     label: 'Hutang',     ikon: '💳' },
     { id: 'kas',        label: 'Kas',        ikon: '💰' },
   ]
 
+  // Menu tambahan yang diakses lewat panel "Lainnya" di mobile (menu yang lebih jarang dipakai harian)
+  const menuLainnyaAdmin = [
+    { id: 'hutang',     label: 'Hutang',     ikon: '💳' },
+    { id: 'pemain',     label: 'Pemain',     ikon: '🧑‍🤝‍🧑' },
+    { id: 'stok',       label: 'Stok',       ikon: '📦' },
+    { id: 'export',     label: 'Export',     ikon: '📤' },
+    { id: 'pengaturan', label: 'Pengaturan', ikon: '⚙️' },
+  ]
+  const menuLainnyaKasir = [
+    { id: 'hutang',     label: 'Hutang',     ikon: '💳' },
+    { id: 'pemain',     label: 'Pemain',     ikon: '🧑‍🤝‍🧑' },
+    { id: 'stok',       label: 'Stok',       ikon: '📦' },
+  ]
+  const menuLainnya = isAdmin ? menuLainnyaAdmin : menuLainnyaKasir
+
   const halaman = {
-    ringkasan:  <Ringkasan />,
+    ringkasan:  <Ringkasan onNavigate={setAktif} />,
     stok:       <Stok isAdmin={isAdmin} />,
     transaksi:  <Transaksi />,
     match:      <Match />,
+    pemain:     <Pemain />,
     hutang:     <Hutang />,
     kas:        <Kas />,
     ...(isAdmin && {
@@ -155,7 +174,7 @@ export default function Layout() {
           {menuMobile.map(menu => (
             <button
               key={menu.id}
-              onClick={() => setAktif(menu.id)}
+              onClick={() => { setAktif(menu.id); setShowMenuLainnya(false) }}
               style={{
                 flex: 1,
                 padding: '8px 4px',
@@ -179,7 +198,63 @@ export default function Layout() {
               </span>
             </button>
           ))}
+
+          {/* Tombol "Lainnya" — highlight kalau halaman aktif sekarang ada di dalam menuLainnya */}
+          <button
+            onClick={() => setShowMenuLainnya(true)}
+            style={{
+              flex: 1,
+              padding: '8px 4px',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 3,
+              color: menuLainnya.some(m => m.id === aktif) ? '#4ade80' : '#475569',
+              fontFamily: 'inherit',
+              transition: 'color 0.15s',
+            }}
+          >
+            <span style={{ fontSize: 20 }}>⋯</span>
+            <span style={{ fontSize: 10, fontWeight: menuLainnya.some(m => m.id === aktif) ? 700 : 500 }}>
+              Lainnya
+            </span>
+          </button>
         </nav>
+      )}
+
+      {/* Panel "Lainnya" — bottom sheet sederhana, isinya menu yang tidak masuk bottom nav utama */}
+      {isMobile && showMenuLainnya && (
+        <div
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:150, display:'flex', alignItems:'flex-end' }}
+          onClick={() => setShowMenuLainnya(false)}
+        >
+          <div
+            style={{ background:'#1e293b', borderTop:'1px solid #334155', borderRadius:'16px 16px 0 0', width:'100%', padding:'20px 16px', paddingBottom:'calc(20px + env(safe-area-inset-bottom))' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ width:36, height:4, background:'#334155', borderRadius:4, margin:'0 auto 16px' }} />
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:12 }}>
+              {menuLainnya.map(menu => (
+                <button
+                  key={menu.id}
+                  onClick={() => { setAktif(menu.id); setShowMenuLainnya(false) }}
+                  style={{
+                    display:'flex', flexDirection:'column', alignItems:'center', gap:6,
+                    padding:'16px 8px', borderRadius:12,
+                    background: aktif === menu.id ? 'rgba(22,163,74,0.15)' : '#0f172a',
+                    border:'none', cursor:'pointer', fontFamily:'inherit',
+                  }}
+                >
+                  <span style={{ fontSize:24 }}>{menu.ikon}</span>
+                  <span style={{ fontSize:12, fontWeight:600, color: aktif === menu.id ? '#4ade80' : '#94a3b8' }}>{menu.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -116,6 +116,18 @@ function cariPaketHarga(paketList, totalBola) {
   return paketList.find(p => bulat >= p.min_bola && bulat <= p.max_bola) || null
 }
 
+// Normalisasi nama untuk deteksi mirip: lowercase + hapus spasi ekstra (sama seperti di Pemain.js)
+function normalisasiNama(nama) {
+  return nama.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+// Cari pemain lain yang namanya mirip (normalisasi sama) — cuma untuk PERINGATAN, tidak blokir
+function cariPemainMirip(nama, daftarPemain) {
+  const target = normalisasiNama(nama)
+  if (!target) return []
+  return daftarPemain.filter(p => normalisasiNama(p.nama) === target)
+}
+
 // ============================================
 // STYLE (konsisten dengan halaman lain)
 // ============================================
@@ -476,15 +488,31 @@ export default function Match() {
   async function simpanPemainBaru() {
     if (!pemainBaruNama.trim()) { tampilPesan('⚠️ Nama pemain wajib diisi!'); return }
     setLoading(true)
+    const namaBaru = pemainBaruNama.trim()
     const { data, error } = await supabase
       .from('pemain')
-      .insert([{ nama: pemainBaruNama.trim(), no_hp: pemainBaruHp.trim() || null }])
+      .insert([{ nama: namaBaru, no_hp: pemainBaruHp.trim() || null }])
       .select()
       .single()
-    setLoading(false)
-    if (error) { tampilPesan('❌ ' + error.message); return }
 
-    tampilPesan(`✅ Pemain "${data.nama}" ditambahkan!`)
+    if (error) { setLoading(false); tampilPesan('❌ ' + error.message); return }
+
+    // Cek apakah ada hutang lama dengan nama SAMA PERSIS (case-insensitive) yang belum terhubung
+    // ke pemain manapun — kalau ada, sambungkan otomatis ke pemain baru ini (konsisten dengan Pemain.js)
+    const { data: hutangCocok } = await supabase
+      .from('hutang')
+      .select('id')
+      .is('pemain_id', null)
+      .ilike('nama', namaBaru)
+
+    let pesanTambahan = ''
+    if (hutangCocok && hutangCocok.length > 0) {
+      await supabase.from('hutang').update({ pemain_id: data.id }).is('pemain_id', null).ilike('nama', namaBaru)
+      pesanTambahan = ` — ${hutangCocok.length} hutang lama tersambung!`
+    }
+
+    setLoading(false)
+    tampilPesan(`✅ Pemain "${data.nama}" ditambahkan!${pesanTambahan}`)
     setDaftarPemain([...daftarPemain, data].sort((a, b) => a.nama.localeCompare(b.nama)))
     setPemainBaruNama('')
     setPemainBaruHp('')
@@ -928,6 +956,12 @@ export default function Match() {
                     <div style={{ marginTop:10, background:'#0f172a', borderRadius:8, padding:14, display:'flex', flexDirection:'column', gap:10 }}>
                       <input style={inp} placeholder="Nama pemain" value={pemainBaruNama} onChange={e => setPemainBaruNama(e.target.value)} />
                       <input style={inp} placeholder="No. HP (opsional)" value={pemainBaruHp} onChange={e => setPemainBaruHp(e.target.value)} />
+                      {pemainBaruNama.trim() !== '' && cariPemainMirip(pemainBaruNama, daftarPemain).length > 0 && (
+                        <div style={{ background:'#422006', border:'1px solid #92400e', borderRadius:8, padding:10, fontSize:12 }}>
+                          ⚠️ Sudah ada pemain bernama <strong>{cariPemainMirip(pemainBaruNama, daftarPemain).map(p => p.nama).join(', ')}</strong>.
+                          Pastikan ini orang berbeda sebelum menyimpan.
+                        </div>
+                      )}
                       <button style={{ ...btnG, alignSelf:'flex-start' }} onClick={simpanPemainBaru} disabled={loading}>💾 Simpan Pemain</button>
                     </div>
                   )}
