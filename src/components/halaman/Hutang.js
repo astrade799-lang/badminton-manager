@@ -26,6 +26,24 @@ function useIsMobile() {
   return isMobile
 }
 
+// Kelompokkan hutang per pemain. Pemain dengan pemain_id dikelompokkan by pemain_id (akurat).
+// Hutang lama tanpa pemain_id (manual, nama teks bebas) dikelompokkan by nama sebagai fallback.
+function groupHutangPerPemain(daftarHutang) {
+  const grup = {} // { [key]: { key, nama, pemainId, items: [], totalHutang, totalBayar, sisa } }
+  daftarHutang.forEach(h => {
+    const key = h.pemain_id ? `id:${h.pemain_id}` : `nama:${h.nama.trim().toLowerCase()}`
+    if (!grup[key]) {
+      grup[key] = { key, nama: h.nama, pemainId: h.pemain_id, items: [], totalHutang: 0, totalBayar: 0 }
+    }
+    grup[key].items.push(h)
+    grup[key].totalHutang += h.total_hutang
+    grup[key].totalBayar += h.sudah_bayar
+  })
+  return Object.values(grup)
+    .map(g => ({ ...g, sisa: Math.max(0, g.totalHutang - g.totalBayar) }))
+    .sort((a, b) => b.sisa - a.sisa) // yang sisa hutangnya terbesar ditampilkan duluan
+}
+
 const panel = { background:'#1e293b', border:'1px solid #334155', borderRadius:12, overflow:'hidden', marginBottom:20 }
 const th = { padding:'11px 20px', textAlign:'left', fontSize:11, fontWeight:700, color:'#475569', textTransform:'uppercase', letterSpacing:'0.8px', borderBottom:'1px solid #334155' }
 const td = { padding:'13px 20px', borderBottom:'1px solid rgba(51,65,85,0.5)', verticalAlign:'middle' }
@@ -79,6 +97,8 @@ export default function Hutang() {
   const [cari, setCari]         = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [pesan, setPesan]       = useState(null)
+  const [tab, setTab]           = useState('list') // 'list' atau 'perpemain'
+  const [grupTerbuka, setGrupTerbuka] = useState(null) // key grup yang sedang di-expand di tab Per Pemain
   const isMobile = useIsMobile()
 
   async function muatData() {
@@ -146,6 +166,11 @@ export default function Hutang() {
     return cocokNama && cocokStatus
   })
 
+  // ── Data untuk tab Per Pemain ──
+  const grupSemua = groupHutangPerPemain(data)
+  const grupFiltered = grupSemua.filter(g => g.nama.toLowerCase().includes(cari.toLowerCase()))
+  const grupAktif = grupFiltered.filter(g => g.sisa > 0)
+
   return (
     <div>
       {pesan && (
@@ -208,110 +233,201 @@ export default function Hutang() {
         </div>
       )}
 
-      <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
-        <input style={{ ...inp, width:'auto', flex:1, minWidth:isMobile?'100%':180, maxWidth:isMobile?'100%':280 }} placeholder="🔍 Cari nama pelanggan..." value={cari} onChange={e=>setCari(e.target.value)} />
-        <select style={{ ...inp, width:isMobile?'100%':'auto' }} value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}>
-          <option value="">Semua Status</option>
-          <option value="Belum Bayar">Belum Bayar</option>
-          <option value="Sebagian">Sebagian</option>
-          <option value="Lunas">Lunas</option>
-        </select>
+      {/* ── TAB ── */}
+      <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+        {[
+          { id:'list',      label:'📋 Semua Transaksi' },
+          { id:'perpemain', label:'🧑‍🤝‍🧑 Per Pemain' },
+        ].map(t => (
+          <button key={t.id}
+            style={{ padding:'8px 16px', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit', border:'none', background: tab===t.id?'#2563eb':'#1e293b', color: tab===t.id?'white':'#94a3b8' }}
+            onClick={()=>setTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      <div style={panel}>
-        <div style={{ padding:'16px 20px', borderBottom:'1px solid #334155', display:'flex', justifyContent:'space-between' }}>
-          <span style={{ fontWeight:700, fontSize:15 }}>Daftar Hutang</span>
-          <span style={{ fontSize:13, color:'#94a3b8' }}>{dataFiltered.length} data</span>
-        </div>
+      <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
+        <input style={{ ...inp, width:'auto', flex:1, minWidth:isMobile?'100%':180, maxWidth:isMobile?'100%':280 }} placeholder="🔍 Cari nama..." value={cari} onChange={e=>setCari(e.target.value)} />
+        {tab === 'list' && (
+          <select style={{ ...inp, width:isMobile?'100%':'auto' }} value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}>
+            <option value="">Semua Status</option>
+            <option value="Belum Bayar">Belum Bayar</option>
+            <option value="Sebagian">Sebagian</option>
+            <option value="Lunas">Lunas</option>
+          </select>
+        )}
+      </div>
 
-        {loading ? (
-          <div style={{ textAlign:'center', padding:40, color:'#94a3b8' }}>Memuat data...</div>
-        ) : dataFiltered.length === 0 ? (
-          <div style={{ textAlign:'center', padding:48, color:'#94a3b8' }}>
-            <div style={{ fontSize:48, marginBottom:12 }}>💳</div>
-            <p>Belum ada data hutang.</p>
+      {/* ── TAB: SEMUA TRANSAKSI (list asli, tidak diubah) ── */}
+      {tab === 'list' && (
+        <div style={panel}>
+          <div style={{ padding:'16px 20px', borderBottom:'1px solid #334155', display:'flex', justifyContent:'space-between' }}>
+            <span style={{ fontWeight:700, fontSize:15 }}>Daftar Hutang</span>
+            <span style={{ fontSize:13, color:'#94a3b8' }}>{dataFiltered.length} data</span>
           </div>
-        ) : isMobile ? (
-          /* ── MOBILE: CARD LIST ── */
-          <div>
-            {dataFiltered.map(h => {
-              const sisa = h.total_hutang - h.sudah_bayar
-              const s    = statusHutang(h.total_hutang, h.sudah_bayar)
-              const pct  = persen(h)
-              const warna = s.label==='Lunas'?'#16a34a':s.label==='Sebagian'?'#f59e0b':'#dc2626'
-              return (
-                <div key={h.id} style={{ padding:'14px 16px', borderBottom:'1px solid rgba(51,65,85,0.5)' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:6 }}>
-                    <div>
-                      <div style={{ fontWeight:700, fontSize:15 }}>{h.nama}</div>
-                      <div style={{ fontSize:11, color:'#475569', marginTop:2 }}>{formatTanggal(h.tanggal)}</div>
-                    </div>
-                    <span style={{ background:s.warna, color:s.teks, padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:700, flexShrink:0 }}>{s.label}</span>
-                  </div>
 
-                  <div style={{ fontSize:12, color:'#94a3b8', marginBottom:10 }}>{h.keterangan}</div>
-
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, fontSize:12, marginBottom:8 }}>
-                    <div style={{ background:'#0f172a', borderRadius:6, padding:'8px 10px' }}>
-                      <div style={{ color:'#475569', fontSize:10, marginBottom:2 }}>TOTAL</div>
-                      <div style={{ fontFamily:'monospace', fontWeight:700 }}>{formatRupiah(h.total_hutang)}</div>
-                    </div>
-                    <div style={{ background:'#0f172a', borderRadius:6, padding:'8px 10px' }}>
-                      <div style={{ color:'#475569', fontSize:10, marginBottom:2 }}>SISA</div>
-                      <div style={{ fontFamily:'monospace', fontWeight:700, color: sisa>0?'#dc2626':'#4ade80' }}>{formatRupiah(Math.max(0,sisa))}</div>
-                    </div>
-                  </div>
-
-                  <div style={{ width:'100%', background:'#0f172a', borderRadius:20, height:6, overflow:'hidden', marginBottom:12 }}>
-                    <div style={{ height:'100%', borderRadius:20, width:`${pct}%`, background:warna }} />
-                  </div>
-
-                  <div style={{ display:'flex', gap:6 }}>
-                    {sisa > 0 && <button style={{...btnK, flex:1}} onClick={()=>setItemBayar(h)}>💰 Bayar</button>}
-                    <button style={{...btnS, padding:'4px 10px', fontSize:12}} onClick={()=>bukaEdit(h)}>✏️</button>
-                    <button style={btnR} onClick={()=>hapus(h.id,h.nama)}>🗑️</button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          /* ── DESKTOP: TABEL ── */
-          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
-            <thead>
-              <tr>{['Nama','Keterangan','Total Hutang','Sudah Bayar','Sisa','Status','Aksi'].map(h=><th key={h} style={th}>{h}</th>)}</tr>
-            </thead>
-            <tbody>
+          {loading ? (
+            <div style={{ textAlign:'center', padding:40, color:'#94a3b8' }}>Memuat data...</div>
+          ) : dataFiltered.length === 0 ? (
+            <div style={{ textAlign:'center', padding:48, color:'#94a3b8' }}>
+              <div style={{ fontSize:48, marginBottom:12 }}>💳</div>
+              <p>Belum ada data hutang.</p>
+            </div>
+          ) : isMobile ? (
+            <div>
               {dataFiltered.map(h => {
                 const sisa = h.total_hutang - h.sudah_bayar
                 const s    = statusHutang(h.total_hutang, h.sudah_bayar)
                 const pct  = persen(h)
                 const warna = s.label==='Lunas'?'#16a34a':s.label==='Sebagian'?'#f59e0b':'#dc2626'
                 return (
-                  <tr key={h.id}>
-                    <td style={td}><strong>{h.nama}</strong><div style={{fontSize:11,color:'#475569',marginTop:2}}>{formatTanggal(h.tanggal)}</div></td>
-                    <td style={{ ...td, color:'#94a3b8', fontSize:13 }}>{h.keterangan}</td>
-                    <td style={{ ...td, fontFamily:'monospace' }}>{formatRupiah(h.total_hutang)}</td>
-                    <td style={{ ...td, fontFamily:'monospace', color:'#4ade80' }}>{formatRupiah(h.sudah_bayar)}</td>
-                    <td style={td}>
-                      <div style={{ fontFamily:'monospace', color: sisa>0?'#dc2626':'#4ade80' }}>{formatRupiah(Math.max(0,sisa))}</div>
-                      <div style={{ width:'100%', background:'#0f172a', borderRadius:20, height:6, overflow:'hidden', marginTop:4 }}>
-                        <div style={{ height:'100%', borderRadius:20, width:`${pct}%`, background:warna }} />
+                  <div key={h.id} style={{ padding:'14px 16px', borderBottom:'1px solid rgba(51,65,85,0.5)' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:6 }}>
+                      <div>
+                        <div style={{ fontWeight:700, fontSize:15 }}>{h.nama}</div>
+                        <div style={{ fontSize:11, color:'#475569', marginTop:2 }}>{formatTanggal(h.tanggal)}</div>
                       </div>
-                    </td>
-                    <td style={td}><span style={{ background:s.warna, color:s.teks, padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:700 }}>{s.label}</span></td>
-                    <td style={{ ...td, display:'flex', gap:6, flexWrap:'wrap' }}>
-                      {sisa>0 && <button style={btnK} onClick={()=>setItemBayar(h)}>💰 Bayar</button>}
+                      <span style={{ background:s.warna, color:s.teks, padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:700, flexShrink:0 }}>{s.label}</span>
+                    </div>
+
+                    <div style={{ fontSize:12, color:'#94a3b8', marginBottom:10 }}>{h.keterangan}</div>
+
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, fontSize:12, marginBottom:8 }}>
+                      <div style={{ background:'#0f172a', borderRadius:6, padding:'8px 10px' }}>
+                        <div style={{ color:'#475569', fontSize:10, marginBottom:2 }}>TOTAL</div>
+                        <div style={{ fontFamily:'monospace', fontWeight:700 }}>{formatRupiah(h.total_hutang)}</div>
+                      </div>
+                      <div style={{ background:'#0f172a', borderRadius:6, padding:'8px 10px' }}>
+                        <div style={{ color:'#475569', fontSize:10, marginBottom:2 }}>SISA</div>
+                        <div style={{ fontFamily:'monospace', fontWeight:700, color: sisa>0?'#dc2626':'#4ade80' }}>{formatRupiah(Math.max(0,sisa))}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ width:'100%', background:'#0f172a', borderRadius:20, height:6, overflow:'hidden', marginBottom:12 }}>
+                      <div style={{ height:'100%', borderRadius:20, width:`${pct}%`, background:warna }} />
+                    </div>
+
+                    <div style={{ display:'flex', gap:6 }}>
+                      {sisa > 0 && <button style={{...btnK, flex:1}} onClick={()=>setItemBayar(h)}>💰 Bayar</button>}
                       <button style={{...btnS, padding:'4px 10px', fontSize:12}} onClick={()=>bukaEdit(h)}>✏️</button>
                       <button style={btnR} onClick={()=>hapus(h.id,h.nama)}>🗑️</button>
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 )
               })}
-            </tbody>
-          </table>
-        )}
-      </div>
+            </div>
+          ) : (
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
+              <thead>
+                <tr>{['Nama','Keterangan','Total Hutang','Sudah Bayar','Sisa','Status','Aksi'].map(h=><th key={h} style={th}>{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                {dataFiltered.map(h => {
+                  const sisa = h.total_hutang - h.sudah_bayar
+                  const s    = statusHutang(h.total_hutang, h.sudah_bayar)
+                  const pct  = persen(h)
+                  const warna = s.label==='Lunas'?'#16a34a':s.label==='Sebagian'?'#f59e0b':'#dc2626'
+                  return (
+                    <tr key={h.id}>
+                      <td style={td}><strong>{h.nama}</strong><div style={{fontSize:11,color:'#475569',marginTop:2}}>{formatTanggal(h.tanggal)}</div></td>
+                      <td style={{ ...td, color:'#94a3b8', fontSize:13 }}>{h.keterangan}</td>
+                      <td style={{ ...td, fontFamily:'monospace' }}>{formatRupiah(h.total_hutang)}</td>
+                      <td style={{ ...td, fontFamily:'monospace', color:'#4ade80' }}>{formatRupiah(h.sudah_bayar)}</td>
+                      <td style={td}>
+                        <div style={{ fontFamily:'monospace', color: sisa>0?'#dc2626':'#4ade80' }}>{formatRupiah(Math.max(0,sisa))}</div>
+                        <div style={{ width:'100%', background:'#0f172a', borderRadius:20, height:6, overflow:'hidden', marginTop:4 }}>
+                          <div style={{ height:'100%', borderRadius:20, width:`${pct}%`, background:warna }} />
+                        </div>
+                      </td>
+                      <td style={td}><span style={{ background:s.warna, color:s.teks, padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:700 }}>{s.label}</span></td>
+                      <td style={{ ...td, display:'flex', gap:6, flexWrap:'wrap' }}>
+                        {sisa>0 && <button style={btnK} onClick={()=>setItemBayar(h)}>💰 Bayar</button>}
+                        <button style={{...btnS, padding:'4px 10px', fontSize:12}} onClick={()=>bukaEdit(h)}>✏️</button>
+                        <button style={btnR} onClick={()=>hapus(h.id,h.nama)}>🗑️</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB: PER PEMAIN (grouped, baru) ── */}
+      {tab === 'perpemain' && (
+        <div style={panel}>
+          <div style={{ padding:'16px 20px', borderBottom:'1px solid #334155', display:'flex', justifyContent:'space-between' }}>
+            <span style={{ fontWeight:700, fontSize:15 }}>Total Hutang per Pemain</span>
+            <span style={{ fontSize:13, color:'#94a3b8' }}>{grupAktif.length} aktif dari {grupFiltered.length}</span>
+          </div>
+
+          {loading ? (
+            <div style={{ textAlign:'center', padding:40, color:'#94a3b8' }}>Memuat data...</div>
+          ) : grupFiltered.length === 0 ? (
+            <div style={{ textAlign:'center', padding:48, color:'#94a3b8' }}>
+              <div style={{ fontSize:48, marginBottom:12 }}>💳</div>
+              <p>Belum ada data hutang.</p>
+            </div>
+          ) : (
+            <div>
+              {grupFiltered.map(g => {
+                const terbuka = grupTerbuka === g.key
+                const adaLunas = g.sisa <= 0
+                return (
+                  <div key={g.key} style={{ borderBottom:'1px solid rgba(51,65,85,0.5)' }}>
+                    <div
+                      style={{ padding: isMobile?'14px 16px':'14px 20px', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}
+                      onClick={() => setGrupTerbuka(terbuka ? null : g.key)}
+                    >
+                      <div>
+                        <div style={{ fontWeight:700, fontSize:14 }}>
+                          {g.nama} {!g.pemainId && <span title="Belum tersambung ke data Pemain" style={{ fontSize:11, color:'#64748b' }}>(manual)</span>}
+                        </div>
+                        <div style={{ fontSize:12, color:'#94a3b8', marginTop:2 }}>{g.items.length} transaksi</div>
+                      </div>
+                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                        {adaLunas ? (
+                          <span style={{ background:'#dcfce7', color:'#14532d', padding:'3px 10px', borderRadius:20, fontSize:12, fontWeight:700 }}>✅ Lunas</span>
+                        ) : (
+                          <span style={{ fontFamily:'monospace', fontWeight:700, color:'#dc2626', fontSize:15 }}>{formatRupiah(g.sisa)}</span>
+                        )}
+                        <span style={{ color:'#64748b' }}>{terbuka ? '▲' : '▼'}</span>
+                      </div>
+                    </div>
+
+                    {terbuka && (
+                      <div style={{ padding: isMobile?'0 16px 14px':'0 20px 14px' }}>
+                        {g.items.map(h => {
+                          const sisaItem = Math.max(0, h.total_hutang - h.sudah_bayar)
+                          const s = statusHutang(h.total_hutang, h.sudah_bayar)
+                          return (
+                            <div key={h.id} style={{ background:'#0f172a', borderRadius:8, padding:'10px 14px', marginBottom:8, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontSize:13, color:'#cbd5e1' }}>{h.keterangan || '–'}</div>
+                                <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{formatTanggal(h.tanggal)}</div>
+                              </div>
+                              <div style={{ textAlign:'right' }}>
+                                <div style={{ fontFamily:'monospace', fontSize:13, color: sisaItem>0?'#dc2626':'#4ade80' }}>{formatRupiah(sisaItem)}</div>
+                                <span style={{ fontSize:10, fontWeight:700, background:s.warna, color:s.teks, padding:'1px 6px', borderRadius:20 }}>{s.label}</span>
+                              </div>
+                              <div style={{ display:'flex', gap:6 }}>
+                                {sisaItem > 0 && <button style={{...btnK, fontSize:11, padding:'3px 8px'}} onClick={()=>setItemBayar(h)}>💰 Bayar</button>}
+                                <button style={{...btnS, fontSize:11, padding:'3px 8px'}} onClick={()=>bukaEdit(h)}>✏️</button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
