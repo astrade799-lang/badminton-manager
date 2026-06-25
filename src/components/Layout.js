@@ -18,6 +18,7 @@ export default function Layout() {
   const [profile, setProfile] = useState(null)
   const [aktif, setAktif]     = useState('ringkasan')
   const [authLoading, setAuthLoading] = useState(true)
+  const [authError, setAuthError] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [showMenuLainnya, setShowMenuLainnya] = useState(false)
 
@@ -32,13 +33,32 @@ export default function Layout() {
   }, [])
 
   useEffect(() => {
+    let selesai = false
+
     async function cekSession() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        setUser(session.user)
-        await muatProfile(session.user.id)
+      try {
+        // "Lomba" antara proses asli vs timer 10 detik — siapa duluan, itu yang menang.
+        // Ini mencegah halaman macet selamanya kalau Supabase lambat bangun dari tidur.
+        const hasil = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000)),
+        ])
+        const { data: { session } } = hasil
+        if (session?.user) {
+          setUser(session.user)
+          await Promise.race([
+            muatProfile(session.user.id),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000)),
+          ])
+        }
+        selesai = true
+        setAuthLoading(false)
+      } catch (err) {
+        if (!selesai) {
+          setAuthError(true)
+          setAuthLoading(false)
+        }
       }
-      setAuthLoading(false)
     }
     cekSession()
 
@@ -132,8 +152,12 @@ export default function Layout() {
   }
 
   if (authLoading) {
-  return <LoadingScreen />
-}
+    return <LoadingScreen />
+  }
+
+  if (authError) {
+    return <LoadingScreen gagal onCobaLagi={() => { setAuthError(false); setAuthLoading(true); window.location.reload() }} />
+  }
 
   if (!user) return <Login onLoginSuccess={setUser} />
 
@@ -261,13 +285,36 @@ export default function Layout() {
 }
 
 // ── LOADING SCREEN — dengan pesan progresif ──────────────────
-function LoadingScreen() {
+function LoadingScreen({ gagal, onCobaLagi }) {
   const [detik, setDetik] = useState(0)
 
   useEffect(() => {
+    if (gagal) return
     const interval = setInterval(() => setDetik(d => d + 1), 1000)
     return () => clearInterval(interval)
-  }, [])
+  }, [gagal])
+
+  if (gagal) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit', padding: 24 }}>
+        <div style={{ textAlign: 'center', maxWidth: 320 }}>
+          <div style={{ fontSize: 48, marginBottom: 20 }}>⚠️</div>
+          <div style={{ color: '#f1f5f9', fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
+            Gagal terhubung ke server
+          </div>
+          <div style={{ color: '#94a3b8', fontSize: 13, lineHeight: 1.5, marginBottom: 20 }}>
+            Server mungkin masih bangun dari tidur. Coba lagi sebentar.
+          </div>
+          <button
+            onClick={onCobaLagi}
+            style={{ padding: '10px 24px', borderRadius: 8, background: '#16a34a', color: 'white', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+          >
+            🔄 Coba Lagi
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   let pesan = 'Memuat aplikasi...'
   let subpesan = ''

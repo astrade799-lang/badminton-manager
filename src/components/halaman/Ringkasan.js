@@ -49,6 +49,7 @@ export default function Ringkasan({ onNavigate }) {
   const [stok, setStok]       = useState([])
   const [trx, setTrx]         = useState([])
   const [loading, setLoading] = useState(true)
+  const [showSemuaStok, setShowSemuaStok] = useState(false)
   const isMobile = useIsMobile()
 
   useEffect(() => {
@@ -168,7 +169,43 @@ export default function Ringkasan({ onNavigate }) {
         )}
       </div>
 
-      <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr 1fr':'1fr 1fr',gap:isMobile?10:16,marginBottom:isMobile?12:20}}>
+      {/* ── BARU: Semua Stok Produk (collapsible, supaya tidak penuhi halaman kalau produknya banyak) ── */}
+      <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:12,overflow:'hidden',marginBottom:isMobile?12:20}}>
+        <div
+          style={{padding:'14px 16px',borderBottom: showSemuaStok?'1px solid #334155':'none',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:'pointer'}}
+          onClick={() => setShowSemuaStok(!showSemuaStok)}
+        >
+          <span style={{fontWeight:700,fontSize:14}}>📦 Semua Stok Produk</span>
+          <span style={{fontSize:12,color:'#94a3b8'}}>{stok.length} produk {showSemuaStok?'▲':'▼'}</span>
+        </div>
+        {showSemuaStok && (
+          stok.length === 0 ? (
+            <div style={{textAlign:'center',padding:24,color:'#475569',fontSize:13}}>Belum ada produk</div>
+          ) : (
+            <div>
+              {stok.slice().sort((a,b)=>a.nama.localeCompare(b.nama)).map(p => {
+                const s = statusStok(p.stok_pcs)
+                return (
+                  <div key={p.id} style={{padding:'10px 16px',borderBottom:'1px solid rgba(51,65,85,0.5)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <div>
+                      <div style={{fontWeight:600,fontSize:13}}>{p.nama}</div>
+                      <div style={{fontSize:11,color:'#475569',marginTop:2}}>{p.kategori || p.tipe_produk || ''}</div>
+                    </div>
+                    <div style={{textAlign:'right'}}>
+                      <div style={{fontFamily:'monospace',fontSize:13,color:'#4ade80',marginBottom:3}}>
+                        {tampilStok(p.stok_pcs, p.isi_per_satuan, p.satuan_besar, p.satuan_kecil)}
+                      </div>
+                      <span style={{background:s.warna,color:s.teks,padding:'1px 6px',borderRadius:20,fontSize:10,fontWeight:700}}>{s.label}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        )}
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr 1fr':'1fr 1fr 1fr',gap:isMobile?10:16,marginBottom:isMobile?12:20}}>
         <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:12,padding:isMobile?14:18,position:'relative',overflow:'hidden'}}>
           <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'#16a34a'}}/>
           <div style={{fontSize:11,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:0.3,marginBottom:8}}>🛒 Jual Bulan Ini</div>
@@ -180,6 +217,12 @@ export default function Ringkasan({ onNavigate }) {
           <div style={{fontSize:11,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:0.3,marginBottom:8}}>🏸 Lapangan Bulan Ini</div>
           <div style={{fontSize:isMobile?16:20,fontWeight:800,fontFamily:'monospace',color:'#c4b5fd',marginBottom:4}}>{formatRupiah(totalPakaiBulanIni)}</div>
           <div style={{fontSize:12,color:'#94a3b8'}}>{pakaiBulanIni.length} sesi · {pcsPakaiBulanIni} pcs</div>
+        </div>
+        <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:12,padding:isMobile?14:18,position:'relative',overflow:'hidden',gridColumn:isMobile?'span 2':'auto'}}>
+          <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'#2563eb'}}/>
+          <div style={{fontSize:11,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',letterSpacing:0.3,marginBottom:8}}>📊 Total Bulan Ini</div>
+          <div style={{fontSize:isMobile?16:20,fontWeight:800,fontFamily:'monospace',color:'#60a5fa',marginBottom:4}}>{formatRupiah(totalJualBulanIni + totalPakaiBulanIni)}</div>
+          <div style={{fontSize:12,color:'#94a3b8'}}>Jual + Lapangan gabungan</div>
         </div>
       </div>
 
