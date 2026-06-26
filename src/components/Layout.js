@@ -35,29 +35,30 @@ export default function Layout() {
   useEffect(() => {
     let selesai = false
 
+    // Timer mandiri: kalau 10 detik berlalu dan proses cek session belum selesai,
+    // paksa tampilkan layar error+retry. Independen dari Supabase auth client.
+    const timer = setTimeout(() => {
+      if (!selesai) {
+        setAuthError(true)
+        setAuthLoading(false)
+      }
+    }, 10000)
+
     async function cekSession() {
       try {
-        // "Lomba" antara proses asli vs timer 10 detik — siapa duluan, itu yang menang.
-        // Ini mencegah halaman macet selamanya kalau Supabase lambat bangun dari tidur.
-        const hasil = await Promise.race([
-          supabase.auth.getSession(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000)),
-        ])
-        const { data: { session } } = hasil
+        const { data: { session } } = await supabase.auth.getSession()
         if (session?.user) {
           setUser(session.user)
-          await Promise.race([
-            muatProfile(session.user.id),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000)),
-          ])
+          await muatProfile(session.user.id)
         }
         selesai = true
+        clearTimeout(timer)
         setAuthLoading(false)
       } catch (err) {
-        if (!selesai) {
-          setAuthError(true)
-          setAuthLoading(false)
-        }
+        selesai = true
+        clearTimeout(timer)
+        setAuthError(true)
+        setAuthLoading(false)
       }
     }
     cekSession()
