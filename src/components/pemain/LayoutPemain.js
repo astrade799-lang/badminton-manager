@@ -3,8 +3,7 @@ import { useState } from 'react'
 
 export default function LayoutPemain({ pemain, onLogout, children, aktif, onChangeTab }) {
   const menus = [
-    { id: 'hutang',  label: 'Hutang',  ikon: '💳' },
-    { id: 'belanja', label: 'Belanja', ikon: '🛒' },
+    { id: 'beranda', label: 'Beranda', ikon: '🏠' },
     { id: 'match',   label: 'Match',   ikon: '🏸' },
   ]
 

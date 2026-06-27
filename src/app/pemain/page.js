@@ -3,8 +3,7 @@ import { useState, useEffect } from 'react'
 import LoginPemain from '@/components/pemain/LoginPemain'
 import GantiPin from '@/components/pemain/GantiPin'
 import LayoutPemain from '@/components/pemain/LayoutPemain'
-import HutangSaya from '@/components/pemain/HutangSaya'
-import BelanjaSaya from '@/components/pemain/BelanjaSaya'
+import Beranda from '@/components/pemain/Beranda'
 import MatchSaya from '@/components/pemain/MatchSaya'
 
 function LoadingScreen() {
@@ -22,7 +21,7 @@ export default function PemainPage() {
   const [status, setStatus] = useState('loading') // loading | login | wajib-ganti-pin | dashboard
   const [pemain, setPemain] = useState(null)
   const [token, setToken] = useState(null)
-  const [tabAktif, setTabAktif] = useState('hutang')
+  const [tabAktif, setTabAktif] = useState('beranda')
 
   useEffect(() => { cekTokenTersimpan() }, [])
 
@@ -83,8 +82,7 @@ export default function PemainPage() {
   if (status === 'wajib-ganti-pin') return <GantiPin token={token} onSelesai={handleGantiPinSelesai} wajib />
 
   const halaman = {
-    hutang:  <HutangSaya pemainId={pemain.pemain_id} />,
-    belanja: <BelanjaSaya pemainId={pemain.pemain_id} />,
+    beranda: <Beranda pemainId={pemain.pemain_id} nama={pemain.nama} />,
     match:   <MatchSaya pemainId={pemain.pemain_id} />,
   }
 
