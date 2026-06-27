@@ -5,6 +5,7 @@ import GantiPin from '@/components/pemain/GantiPin'
 import LayoutPemain from '@/components/pemain/LayoutPemain'
 import Beranda from '@/components/pemain/Beranda'
 import MatchSaya from '@/components/pemain/MatchSaya'
+import SettingAkun from '@/components/pemain/SettingAkun'
 
 function LoadingScreen() {
   return (
@@ -84,6 +85,7 @@ export default function PemainPage() {
   const halaman = {
     beranda: <Beranda pemainId={pemain.pemain_id} nama={pemain.nama} />,
     match:   <MatchSaya pemainId={pemain.pemain_id} />,
+    akun:    <SettingAkun pemain={pemain} token={token} />,
   }
 
   return (

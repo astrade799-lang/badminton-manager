@@ -5,6 +5,7 @@ export default function LayoutPemain({ pemain, onLogout, children, aktif, onChan
   const menus = [
     { id: 'beranda', label: 'Beranda', ikon: '🏠' },
     { id: 'match',   label: 'Match',   ikon: '🏸' },
+    { id: 'akun',    label: 'Akun',    ikon: '⚙️' },
   ]
 
   return (

@@ -59,7 +59,9 @@ export async function POST(request) {
 
     return Response.json({
       token,
+      pemain_id: pemain.id,
       nama: pemain.nama,
+      no_hp: pemain.no_hp,
       wajib_ganti_pin: !pemain.pin_sudah_diganti,
     })
   } catch (err) {
