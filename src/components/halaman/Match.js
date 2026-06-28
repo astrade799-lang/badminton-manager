@@ -38,23 +38,12 @@ function useIsMobile() {
 // Inti rekap: gabungkan data match (bola, dicatat utuh per pemain) + belanja, jadi rekap per pemain
 // Dihitung ulang tiap render dari matchList + belanjaList — TIDAK disimpan permanen di state terpisah
 //
-// PENTING: biayaList berisi riwayat pembayaran yang SUDAH dilakukan di sesi ini (bisa lebih dari 1x
-// per pemain, karena pemain bisa "Bayar" duluan lalu main lagi). Untuk tiap pemain, kita cari waktu
-// pembayaran TERAKHIR mereka, lalu sisa_bola/sisa_belanja di sini hanya menghitung match & belanja
-// yang dibuat SETELAH waktu itu — supaya yang sudah lunas tidak ikut tertagih lagi.
-//
-// Pemain yang sudah pernah bayar TETAP muncul di hasil (tidak hilang dari daftar), dengan
-// total_sudah_dibayar terisi — walau sisa_bola_pcs-nya 0 (belum main lagi setelah bayar).
+// PENTING: setiap baris match_pemain dan sesi_belanja punya kolom sesi_pemain_biaya_id.
+// NULL = belum termasuk pembayaran manapun (masih dihitung sebagai sisa).
+// Terisi  = sudah ditandai lunas lewat pembayaran tertentu, TIDAK dihitung lagi di sini.
+// Ini menggantikan pendekatan lama (bandingkan timestamp) yang rapuh terhadap klik cepat/race condition.
 function hitungRekapPemain(matchList, belanjaList, daftarPemain, biayaList = []) {
-  const rekap = {} // { [pemain_id]: { pemain_id, nama, sisa_bola_pcs, detail_match, sisa_belanja, detail_belanja, total_sudah_dibayar } }
-
-  // Cari waktu pembayaran terakhir per pemain (null kalau belum pernah bayar di sesi ini)
-  const bayarTerakhir = {} // { [pemain_id]: timestamp string }
-  biayaList.forEach(b => {
-    if (!bayarTerakhir[b.pemain_id] || b.created_at > bayarTerakhir[b.pemain_id]) {
-      bayarTerakhir[b.pemain_id] = b.created_at
-    }
-  })
+  const rekap = {}
 
   function pastikanAda(pemainId) {
     if (!rekap[pemainId]) {
@@ -63,38 +52,35 @@ function hitungRekapPemain(matchList, belanjaList, daftarPemain, biayaList = [])
         pemain_id: pemainId,
         nama: p ? p.nama : '(tidak diketahui)',
         sisa_bola_pcs: 0,
-        detail_match: [], // [{ nomor_match, bola_pcs }] — rincian kontribusi tiap match YANG BELUM DIBAYAR
+        detail_match: [],
         sisa_belanja: 0,
         detail_belanja: [],
-        total_sudah_dibayar: 0, // akumulasi semua pembayaran lunas yang pernah dilakukan di sesi ini
+        total_sudah_dibayar: 0,
       }
     }
     return rekap[pemainId]
   }
 
-  // Pemain yang sudah pernah bayar TETAP dimasukkan ke rekap dulu, supaya tidak hilang dari daftar
-  // walau dia belum main lagi setelah bayar (sisa_bola_pcs-nya akan tetap 0)
+  // Pemain yang sudah pernah bayar TETAP dimasukkan ke rekap, supaya tidak hilang dari daftar
   biayaList.forEach(b => {
     const r = pastikanAda(b.pemain_id)
     r.total_sudah_dibayar += b.biaya
   })
 
-  // Akumulasi bola dari match yang dibuat SETELAH pembayaran terakhir pemain itu (atau semua, kalau belum pernah bayar)
+  // Akumulasi bola HANYA dari match_pemain yang BELUM ditandai (sesi_pemain_biaya_id masih NULL)
   matchList.forEach(m => {
     const pemainDiMatch = m.match_pemain || []
     pemainDiMatch.forEach(mp => {
-      const batasWaktu = bayarTerakhir[mp.pemain_id]
-      if (batasWaktu && m.created_at <= batasWaktu) return // sudah pernah dibayar, skip
+      if (mp.sesi_pemain_biaya_id) return // sudah ditandai lunas, skip — TIDAK peduli waktu
       const r = pastikanAda(mp.pemain_id)
       r.sisa_bola_pcs += m.jumlah_bola_pcs
       r.detail_match.push({ nomor_match: m.nomor_match, bola_pcs: m.jumlah_bola_pcs })
     })
   })
 
-  // Akumulasi belanja yang dibuat SETELAH pembayaran terakhir pemain itu
+  // Akumulasi belanja HANYA yang belum ditandai
   belanjaList.forEach(b => {
-    const batasWaktu = bayarTerakhir[b.pemain_id]
-    if (batasWaktu && b.created_at <= batasWaktu) return // sudah pernah dibayar, skip
+    if (b.sesi_pemain_biaya_id) return // sudah ditandai lunas, skip
     const r = pastikanAda(b.pemain_id)
     r.sisa_belanja += b.total
     r.detail_belanja.push(b)
@@ -158,6 +144,7 @@ export default function Match() {
   // ── Kotak utama: penentu "wajah" mana yang tampil ──
   const [sesiAktif, setSesiAktif] = useState(null) // null = belum ada sesi aktif
   const [modeAkhirSesi, setModeAkhirSesi] = useState(false)
+  const [tahapAkhirSesi, setTahapAkhirSesi] = useState('konfirmasi') // 'konfirmasi' | 'detail'
   const [tabKosong, setTabKosong] = useState('mulai') // 'mulai' / 'history' — hanya relevan saat sesiAktif === null
 
   // ── Kotak data sesi aktif (reload tiap ada perubahan) ──
@@ -185,6 +172,8 @@ export default function Match() {
   // ── State form: Tambah Pemain Baru (inline) ──
   const [showFormPemainBaru, setShowFormPemainBaru] = useState(false)
   const [matchTerbuka, setMatchTerbuka] = useState(null) // nomor_match yang sedang di-expand di akordeon Daftar Match
+  const [cariRekap, setCariRekap] = useState('') // search pemain di Rekap Sementara
+  const [pemainRekapTerbuka, setPemainRekapTerbuka] = useState(null) // pemain_id yang sedang di-expand di Rekap Sementara mobile
   const [matchEditId, setMatchEditId] = useState(null) // id match yang sedang diedit jumlah bolanya
   const [matchEditBola, setMatchEditBola] = useState('')
   const [belanjaEditId, setBelanjaEditId] = useState(null) // id sesi_belanja yang sedang diedit
@@ -247,7 +236,7 @@ export default function Match() {
   // Muat match (+ pemain di tiap match), belanja, dan riwayat biaya yang sudah dibayar untuk sesi yang sedang aktif
   async function muatDataSesiAktif(sesiMainId) {
     const [resMatch, resBelanja, resBiaya] = await Promise.all([
-      supabase.from('match').select('*, match_pemain(pemain_id)').eq('sesi_main_id', sesiMainId).order('nomor_match'),
+      supabase.from('match').select('*, match_pemain(id, pemain_id, sesi_pemain_biaya_id)').eq('sesi_main_id', sesiMainId).order('nomor_match'),
       supabase.from('sesi_belanja').select('*, stok:produk_id(nama, satuan_kecil)').eq('sesi_main_id', sesiMainId).order('created_at'),
       supabase.from('sesi_pemain_biaya').select('*').eq('sesi_main_id', sesiMainId),
     ])
@@ -538,14 +527,40 @@ export default function Match() {
     setLoading(true)
     try {
       // 1. Catat sebagai lunas di sesi_pemain_biaya — sesi TETAP aktif, ini cuma "nota" untuk porsi yang dibayar sekarang
-      const { error: errBiaya } = await supabase.from('sesi_pemain_biaya').insert([{
+      const { data: biayaRow, error: errBiaya } = await supabase.from('sesi_pemain_biaya').insert([{
         sesi_main_id: sesiAktif.id,
         pemain_id: modalBayarPemain.pemain_id,
         total_bola_pcs: modalBayarPemain.sisa_bola_pcs,
         biaya: biaya,
         status_bayar: 'lunas',
-      }])
+      }]).select().single()
       if (errBiaya) throw new Error(errBiaya.message)
+
+      // 1b. Tandai EKSPLISIT semua match_pemain & sesi_belanja milik pemain ini yang masih
+      // belum ditandai (NULL) — supaya tidak terhitung lagi sebagai sisa, terlepas dari waktu klik.
+      const nomorMatchYangDibayar = modalBayarPemain.detail_match.map(d => d.nomor_match)
+      if (nomorMatchYangDibayar.length > 0) {
+        const matchIdYangDibayar = matchList
+          .filter(m => nomorMatchYangDibayar.includes(m.nomor_match))
+          .flatMap(m => (m.match_pemain || [])
+            .filter(mp => mp.pemain_id === modalBayarPemain.pemain_id && !mp.sesi_pemain_biaya_id)
+            .map(mp => mp.id))
+        if (matchIdYangDibayar.length > 0) {
+          const { error: errTandaMatch } = await supabase
+            .from('match_pemain')
+            .update({ sesi_pemain_biaya_id: biayaRow.id })
+            .in('id', matchIdYangDibayar)
+          if (errTandaMatch) throw new Error(errTandaMatch.message)
+        }
+      }
+      if (modalBayarPemain.detail_belanja.length > 0) {
+        const belanjaIdYangDibayar = modalBayarPemain.detail_belanja.map(b => b.id)
+        const { error: errTandaBelanja } = await supabase
+          .from('sesi_belanja')
+          .update({ sesi_pemain_biaya_id: biayaRow.id })
+          .in('id', belanjaIdYangDibayar)
+        if (errTandaBelanja) throw new Error(errTandaBelanja.message)
+      }
 
       // 2. Masuk ke kas
       const { error: errKas } = await supabase.from('kas').insert([{
@@ -584,6 +599,7 @@ export default function Match() {
       }
     })
     setFormBiayaFinal(formAwal)
+    setTahapAkhirSesi('konfirmasi')
     setModeAkhirSesi(true)
   }
 
@@ -625,6 +641,23 @@ export default function Match() {
           .single()
 
         if (errBiaya) throw new Error(`Gagal simpan biaya ${r.nama}: ${errBiaya.message}`)
+
+        // 1b. Tandai eksplisit match_pemain & sesi_belanja milik pemain ini yang masih belum ditandai
+        const nomorMatchPemainIni = r.detail_match.map(d => d.nomor_match)
+        if (nomorMatchPemainIni.length > 0) {
+          const matchIdPemainIni = matchList
+            .filter(m => nomorMatchPemainIni.includes(m.nomor_match))
+            .flatMap(m => (m.match_pemain || [])
+              .filter(mp => mp.pemain_id === r.pemain_id && !mp.sesi_pemain_biaya_id)
+              .map(mp => mp.id))
+          if (matchIdPemainIni.length > 0) {
+            await supabase.from('match_pemain').update({ sesi_pemain_biaya_id: biayaRow.id }).in('id', matchIdPemainIni)
+          }
+        }
+        if (r.detail_belanja.length > 0) {
+          const belanjaIdPemainIni = r.detail_belanja.map(b => b.id)
+          await supabase.from('sesi_belanja').update({ sesi_pemain_biaya_id: biayaRow.id }).in('id', belanjaIdPemainIni)
+        }
 
         if (f.status === 'lunas') {
           // 2a. LUNAS → masuk ke kas
@@ -1061,82 +1094,114 @@ export default function Match() {
             <div style={{ padding:'10px 20px', fontSize:12, color:'#64748b', borderBottom:'1px solid rgba(51,65,85,0.5)' }}>
               💡 Klik "Bayar" untuk pemain yang mau bayar sekarang — sesi tetap berjalan untuk pemain lain.
             </div>
+            {rekapPemain.length > 0 && (
+              <div style={{ padding:'12px 20px', borderBottom:'1px solid rgba(51,65,85,0.5)' }}>
+                <input style={inp} placeholder="🔍 Cari nama pemain..." value={cariRekap} onChange={e => setCariRekap(e.target.value)} />
+              </div>
+            )}
 
-            {rekapPemain.length === 0 ? (
-              <div style={{ textAlign:'center', padding:48, color:'#94a3b8' }}>
-                <div style={{ fontSize:48, marginBottom:12 }}>🏸</div>
-                <p>Belum ada match atau belanja tercatat.</p>
-              </div>
-            ) : isMobile ? (
-              <div>
-                {rekapPemain.map(r => {
-                  const rincian = formatRincianBola(r.detail_match)
-                  const saran = cariPaketHarga(daftarPaketHarga, r.sisa_bola_pcs)
-                  const adaSisa = r.sisa_bola_pcs > 0 || r.sisa_belanja > 0
-                  return (
-                    <div key={r.pemain_id} style={{ padding:'12px 16px', borderBottom:'1px solid rgba(51,65,85,0.5)' }}>
-                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-                        <div style={{ fontWeight:700, fontSize:14 }}>{r.nama}</div>
-                        {r.total_sudah_dibayar > 0 && (
-                          <span style={{ background:'#14532d', color:'#4ade80', padding:'2px 8px', borderRadius:20, fontSize:11, fontWeight:700 }}>
-                            ✅ Lunas {formatRupiah(r.total_sudah_dibayar)}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:4 }}>
-                        <span style={{ color:'#94a3b8' }}>🏸 Sisa: <strong style={{color:'#f1f5f9'}}>{r.sisa_bola_pcs} bola</strong></span>
-                        <span style={{ color:'#94a3b8' }}>🛒 {formatRupiah(r.sisa_belanja)}</span>
-                      </div>
-                      {rincian && (
-                        <div style={{ fontSize:11, color:'#64748b', fontFamily:'monospace', marginBottom:4 }}>{rincian}</div>
-                      )}
-                      {saran && adaSisa && (
-                        <div style={{ fontSize:11, color:'#4ade80', marginBottom:8 }}>💡 Saran: {saran.label} = {formatRupiah(saran.harga)}</div>
-                      )}
-                      <div style={{ display:'flex', gap:6, marginTop:8 }}>
-                        <button style={{ ...btnS, flex:1, padding:'7px 10px', fontSize:12 }}
-                          onClick={() => { setBelanjaPemainId(r.pemain_id); setShowFormBelanja(true); setShowFormMatch(false) }}>
-                          🛒 Belanja
-                        </button>
-                        <button style={{ ...btnG, flex:1, padding:'7px 10px', fontSize:12, opacity: adaSisa?1:0.4 }}
-                          onClick={() => adaSisa && bukaModalBayar(r)} disabled={!adaSisa}>
-                          💰 Bayar
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
-                <thead>
-                  <tr>{['Pemain', 'Sisa Bola', 'Saran Harga', 'Sisa Belanja', 'Status', 'Aksi'].map(h => <th key={h} style={th}>{h}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {rekapPemain.map(r => {
+            {(() => {
+              const rekapFiltered = rekapPemain.filter(r => r.nama.toLowerCase().includes(cariRekap.toLowerCase()))
+              if (rekapPemain.length === 0) {
+                return (
+                  <div style={{ textAlign:'center', padding:48, color:'#94a3b8' }}>
+                    <div style={{ fontSize:48, marginBottom:12 }}>🏸</div>
+                    <p>Belum ada match atau belanja tercatat.</p>
+                  </div>
+                )
+              }
+              if (rekapFiltered.length === 0) {
+                return (
+                  <div style={{ textAlign:'center', padding:32, color:'#94a3b8', fontSize:13 }}>
+                    Tidak ada pemain bernama "{cariRekap}".
+                  </div>
+                )
+              }
+              return isMobile ? (
+                <div>
+                  {rekapFiltered.map(r => {
                     const rincian = formatRincianBola(r.detail_match)
                     const saran = cariPaketHarga(daftarPaketHarga, r.sisa_bola_pcs)
                     const adaSisa = r.sisa_bola_pcs > 0 || r.sisa_belanja > 0
+                    const terbuka = pemainRekapTerbuka === r.pemain_id
                     return (
-                      <tr key={r.pemain_id}>
-                        <td style={td}><strong>{r.nama}</strong></td>
-                        <td style={{ ...td, fontFamily:'monospace' }}>
-                          {r.sisa_bola_pcs} pcs
-                          {rincian && <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{rincian}</div>}
-                        </td>
-                        <td style={{ ...td, fontFamily:'monospace', color: saran && adaSisa ? '#4ade80' : '#475569' }}>
-                          {saran && adaSisa ? `${saran.label} = ${formatRupiah(saran.harga)}` : '–'}
-                        </td>
-                        <td style={{ ...td, fontFamily:'monospace', color:'#4ade80' }}>{formatRupiah(r.sisa_belanja)}</td>
-                        <td style={td}>
-                          {r.total_sudah_dibayar > 0 ? (
-                            <span style={{ background:'#14532d', color:'#4ade80', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:700 }}>
-                              ✅ Lunas {formatRupiah(r.total_sudah_dibayar)}
-                            </span>
-                          ) : (
-                            <span style={{ color:'#475569', fontSize:12 }}>–</span>
-                          )}
-                        </td>
+                      <div key={r.pemain_id} style={{ borderBottom:'1px solid rgba(51,65,85,0.5)' }}>
+                        <div
+                          style={{ padding:'12px 16px', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' }}
+                          onClick={() => setPemainRekapTerbuka(terbuka ? null : r.pemain_id)}
+                        >
+                          <div style={{ fontWeight:700, fontSize:14 }}>{r.nama}</div>
+                          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                            {r.total_sudah_dibayar > 0 && (
+                              <span style={{ background:'#14532d', color:'#4ade80', padding:'2px 8px', borderRadius:20, fontSize:11, fontWeight:700 }}>✅ Lunas</span>
+                            )}
+                            {adaSisa && (
+                              <span style={{ fontFamily:'monospace', fontSize:12, color:'#f59e0b' }}>{r.sisa_bola_pcs} bola</span>
+                            )}
+                            <span style={{ color:'#64748b' }}>{terbuka ? '▲' : '▼'}</span>
+                          </div>
+                        </div>
+                        {terbuka && (
+                          <div style={{ padding:'0 16px 14px' }}>
+                            <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:4 }}>
+                              <span style={{ color:'#94a3b8' }}>🏸 Sisa: <strong style={{color:'#f1f5f9'}}>{r.sisa_bola_pcs} bola</strong></span>
+                              <span style={{ color:'#94a3b8' }}>🛒 {formatRupiah(r.sisa_belanja)}</span>
+                            </div>
+                            {rincian && (
+                              <div style={{ fontSize:11, color:'#64748b', fontFamily:'monospace', marginBottom:4 }}>{rincian}</div>
+                            )}
+                            {saran && adaSisa && (
+                              <div style={{ fontSize:11, color:'#4ade80', marginBottom:8 }}>💡 Saran: {saran.label} = {formatRupiah(saran.harga)}</div>
+                            )}
+                            {r.total_sudah_dibayar > 0 && (
+                              <div style={{ fontSize:12, color:'#4ade80', marginBottom:8 }}>✅ Sudah dibayar: {formatRupiah(r.total_sudah_dibayar)}</div>
+                            )}
+                            <div style={{ display:'flex', gap:6, marginTop:8 }}>
+                              <button style={{ ...btnS, flex:1, padding:'7px 10px', fontSize:12 }}
+                                onClick={() => { setBelanjaPemainId(r.pemain_id); setShowFormBelanja(true); setShowFormMatch(false) }}>
+                                🛒 Belanja
+                              </button>
+                              <button style={{ ...btnG, flex:1, padding:'7px 10px', fontSize:12, opacity: adaSisa?1:0.4 }}
+                                onClick={() => adaSisa && bukaModalBayar(r)} disabled={!adaSisa}>
+                                💰 Bayar
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
+                  <thead>
+                    <tr>{['Pemain', 'Sisa Bola', 'Saran Harga', 'Sisa Belanja', 'Status', 'Aksi'].map(h => <th key={h} style={th}>{h}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {rekapFiltered.map(r => {
+                      const rincian = formatRincianBola(r.detail_match)
+                      const saran = cariPaketHarga(daftarPaketHarga, r.sisa_bola_pcs)
+                      const adaSisa = r.sisa_bola_pcs > 0 || r.sisa_belanja > 0
+                      return (
+                        <tr key={r.pemain_id}>
+                          <td style={td}><strong>{r.nama}</strong></td>
+                          <td style={{ ...td, fontFamily:'monospace' }}>
+                            {r.sisa_bola_pcs} pcs
+                            {rincian && <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{rincian}</div>}
+                          </td>
+                          <td style={{ ...td, fontFamily:'monospace', color: saran && adaSisa ? '#4ade80' : '#475569' }}>
+                            {saran && adaSisa ? `${saran.label} = ${formatRupiah(saran.harga)}` : '–'}
+                          </td>
+                          <td style={{ ...td, fontFamily:'monospace', color:'#4ade80' }}>{formatRupiah(r.sisa_belanja)}</td>
+                          <td style={td}>
+                            {r.total_sudah_dibayar > 0 ? (
+                              <span style={{ background:'#14532d', color:'#4ade80', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:700 }}>
+                                ✅ Lunas {formatRupiah(r.total_sudah_dibayar)}
+                              </span>
+                            ) : (
+                              <span style={{ color:'#475569', fontSize:12 }}>–</span>
+                            )}
+                          </td>
                         <td style={{ ...td, display:'flex', gap:6 }}>
                           <button style={{ ...btnS, padding:'6px 12px', fontSize:12 }}
                             onClick={() => { setBelanjaPemainId(r.pemain_id); setShowFormBelanja(true); setShowFormMatch(false) }}>
@@ -1152,7 +1217,8 @@ export default function Match() {
                   })}
                 </tbody>
               </table>
-            )}
+              )
+            })()}
           </div>
 
           {/* ── DAFTAR MATCH (akordeon, klik untuk lihat detail) ── */}
@@ -1279,7 +1345,84 @@ export default function Match() {
       {/* ============================================ */}
       {/* WAJAH C: MODE AKHIR SESI */}
       {/* ============================================ */}
-      {sesiAktif && modeAkhirSesi && (
+      {sesiAktif && modeAkhirSesi && tahapAkhirSesi === 'konfirmasi' && (() => {
+        const totalBolaSesi = matchList.reduce((s, m) => s + m.jumlah_bola_pcs, 0)
+        const totalBelanjaSesi = belanjaList.reduce((s, b) => s + b.total, 0)
+        const totalSudahMasukKas = biayaList.filter(b => b.status_bayar === 'lunas' || true).reduce((s, b) => s + b.biaya, 0)
+        const pemainBelumBayar = rekapPemain.filter(r => r.sisa_bola_pcs > 0 || r.sisa_belanja > 0)
+        const produkTerjual = {} // { nama_produk: { jumlah, total } }
+        belanjaList.forEach(b => {
+          const nama = b.stok?.nama || 'Produk'
+          if (!produkTerjual[nama]) produkTerjual[nama] = { jumlah: 0, total: 0, satuan: b.stok?.satuan_kecil || 'pcs' }
+          produkTerjual[nama].jumlah += b.jumlah_pcs
+          produkTerjual[nama].total += b.total
+        })
+
+        return (
+          <div>
+            <div style={panel}>
+              <div style={{ padding:'16px 20px', borderBottom:'1px solid #334155' }}>
+                <div style={{ fontWeight:700, fontSize:15 }}>🏁 Konfirmasi Akhiri Sesi — {namaSesi(sesiAktif)}</div>
+                <div style={{ fontSize:12, color:'#94a3b8', marginTop:4 }}>Tinjau ringkasan sesi sebelum lanjut ke detail pembayaran.</div>
+              </div>
+
+              <div style={{ padding:isMobile?16:20, display:'grid', gridTemplateColumns: isMobile?'1fr 1fr':'repeat(3, 1fr)', gap:12 }}>
+                <div style={{ background:'#0f172a', borderRadius:8, padding:14 }}>
+                  <div style={{ fontSize:11, color:'#94a3b8', marginBottom:4 }}>🏸 Total Bola Terpakai</div>
+                  <div style={{ fontSize:18, fontWeight:800, fontFamily:'monospace' }}>{totalBolaSesi}</div>
+                </div>
+                <div style={{ background:'#0f172a', borderRadius:8, padding:14 }}>
+                  <div style={{ fontSize:11, color:'#94a3b8', marginBottom:4 }}>🛒 Total Belanja</div>
+                  <div style={{ fontSize:18, fontWeight:800, fontFamily:'monospace', color:'#4ade80' }}>{formatRupiah(totalBelanjaSesi)}</div>
+                </div>
+                <div style={{ background:'#0f172a', borderRadius:8, padding:14, gridColumn: isMobile?'span 2':'auto' }}>
+                  <div style={{ fontSize:11, color:'#94a3b8', marginBottom:4 }}>💰 Sudah Masuk Kas (Bayar Sebagian)</div>
+                  <div style={{ fontSize:18, fontWeight:800, fontFamily:'monospace', color:'#4ade80' }}>{formatRupiah(totalSudahMasukKas)}</div>
+                </div>
+              </div>
+
+              {Object.keys(produkTerjual).length > 0 && (
+                <div style={{ padding:isMobile?'0 16px 16px':'0 20px 20px' }}>
+                  <div style={{ fontSize:13, fontWeight:700, marginBottom:8 }}>🛒 Produk Terjual</div>
+                  <div style={{ background:'#0f172a', borderRadius:8, overflow:'hidden' }}>
+                    {Object.entries(produkTerjual).map(([nama, d]) => (
+                      <div key={nama} style={{ padding:'8px 14px', borderBottom:'1px solid rgba(51,65,85,0.5)', display:'flex', justifyContent:'space-between', fontSize:13 }}>
+                        <span>{nama} ({d.jumlah} {d.satuan})</span>
+                        <span style={{ fontFamily:'monospace', color:'#4ade80' }}>{formatRupiah(d.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ padding:isMobile?'0 16px 16px':'0 20px 20px' }}>
+                <div style={{ fontSize:13, fontWeight:700, marginBottom:8 }}>
+                  {pemainBelumBayar.length > 0 ? `⏳ Pemain Belum Bayar (${pemainBelumBayar.length})` : '✅ Semua Pemain Sudah Lunas'}
+                </div>
+                {pemainBelumBayar.length > 0 && (
+                  <div style={{ background:'#0f172a', borderRadius:8, overflow:'hidden' }}>
+                    {pemainBelumBayar.map(r => (
+                      <div key={r.pemain_id} style={{ padding:'8px 14px', borderBottom:'1px solid rgba(51,65,85,0.5)', display:'flex', justifyContent:'space-between', fontSize:13 }}>
+                        <span>{r.nama}</span>
+                        <span style={{ fontFamily:'monospace', color:'#f59e0b' }}>{r.sisa_bola_pcs} bola{r.sisa_belanja > 0 ? ` + ${formatRupiah(r.sisa_belanja)}` : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ padding:isMobile?16:20, display:'flex', gap:10, justifyContent:'flex-end', borderTop:'1px solid #334155' }}>
+                <button style={btnS} onClick={() => setModeAkhirSesi(false)}>← Batal</button>
+                <button style={{ ...btnG, flex: isMobile?1:'none' }} onClick={() => setTahapAkhirSesi('detail')}>
+                  Lanjut Isi Detail →
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {sesiAktif && modeAkhirSesi && tahapAkhirSesi === 'detail' && (
         <div>
           <div style={panel}>
             <div style={{ padding:'16px 20px', borderBottom:'1px solid #334155' }}>
@@ -1364,7 +1507,7 @@ export default function Match() {
             </div>
 
             <div style={{ padding:isMobile?16:20, display:'flex', gap:10, justifyContent:'flex-end' }}>
-              <button style={btnS} onClick={() => setModeAkhirSesi(false)} disabled={loading}>← Kembali</button>
+              <button style={btnS} onClick={() => setTahapAkhirSesi('konfirmasi')} disabled={loading}>← Kembali</button>
               <button style={{ ...btnG, flex: isMobile?1:'none' }} onClick={submitAkhirSesi} disabled={loading}>
                 {loading ? '⏳ Menyimpan...' : '✅ Submit & Selesaikan Sesi'}
               </button>
