@@ -403,6 +403,7 @@ function Pengaturan({ profile }) {
       </div>
 
       <HargaPaketBola />
+      <InfoAdminPemain />
     </div>
   )
 }
@@ -541,6 +542,196 @@ function HargaPaketBola() {
                   </div>
                 </>
               )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── SECTION: Informasi untuk Pemain ──────────────────
+// CRUD untuk tabel info_admin. Tampil di dashboard Pemain (Beranda) kalau aktif=true.
+function InfoAdminPemain() {
+  const [daftar, setDaftar]   = useState([])
+  const [loading, setLoading] = useState(true)
+  const [pesan, setPesan]     = useState(null)
+  const [showForm, setShowForm] = useState(false)
+  const [editId, setEditId]   = useState(null)
+  const [uploading, setUploading] = useState(false)
+
+  const formDefault = { kategori:'umum', judul:'', konten:'', gambar_url:'', aktif:true }
+  const [form, setForm] = useState(formDefault)
+
+  function tampilPesan(teks) { setPesan(teks); setTimeout(() => setPesan(null), 3000) }
+
+  // Upload file gambar ke Supabase Storage (bucket 'info-admin'), lalu simpan URL publiknya ke form
+  async function handleUploadGambar(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    const namaFile = `${Date.now()}-${file.name.replace(/\s+/g, '-')}`
+    const { error: errUpload } = await supabase.storage.from('info-admin').upload(namaFile, file)
+
+    if (errUpload) {
+      setUploading(false)
+      tampilPesan('❌ Gagal upload: ' + errUpload.message)
+      return
+    }
+
+    const { data: urlData } = supabase.storage.from('info-admin').getPublicUrl(namaFile)
+    setForm({ ...form, gambar_url: urlData.publicUrl })
+    setUploading(false)
+    tampilPesan('✅ Gambar berhasil diupload!')
+  }
+
+  async function muatData() {
+    setLoading(true)
+    const { data, error } = await supabase.from('info_admin').select('*').order('urutan')
+    if (!error) setDaftar(data)
+    setLoading(false)
+  }
+  useEffect(() => { muatData() }, [])
+
+  async function simpan() {
+    if (!form.judul.trim()) { tampilPesan('⚠️ Judul wajib diisi!'); return }
+    const payload = {
+      kategori: form.kategori,
+      judul: form.judul.trim(),
+      konten: form.konten.trim() || null,
+      gambar_url: form.gambar_url.trim() || null,
+      aktif: form.aktif,
+    }
+    if (editId) {
+      const { error } = await supabase.from('info_admin').update(payload).eq('id', editId)
+      if (error) { tampilPesan('❌ ' + error.message); return }
+      tampilPesan('✅ Info diperbarui!')
+    } else {
+      const urutanBaru = daftar.length > 0 ? Math.max(...daftar.map(d => d.urutan || 0)) + 1 : 1
+      const { error } = await supabase.from('info_admin').insert([{ ...payload, urutan: urutanBaru }])
+      if (error) { tampilPesan('❌ ' + error.message); return }
+      tampilPesan('✅ Info ditambahkan!')
+    }
+    setForm(formDefault); setEditId(null); setShowForm(false)
+    muatData()
+  }
+
+  function bukaEdit(item) {
+    setForm({ kategori:item.kategori, judul:item.judul, konten:item.konten||'', gambar_url:item.gambar_url||'', aktif:item.aktif })
+    setEditId(item.id); setShowForm(true)
+  }
+
+  async function toggleAktif(item) {
+    const { error } = await supabase.from('info_admin').update({ aktif: !item.aktif }).eq('id', item.id)
+    if (error) { tampilPesan('❌ ' + error.message); return }
+    muatData()
+  }
+
+  async function hapus(item) {
+    if (!confirm(`Hapus info "${item.judul}"?`)) return
+    const { error } = await supabase.from('info_admin').delete().eq('id', item.id)
+    if (error) { tampilPesan('❌ ' + error.message); return }
+    tampilPesan('🗑️ Dihapus')
+    muatData()
+  }
+
+  const inp = { background:'#0f172a', border:'1px solid #334155', borderRadius:8, color:'#f1f5f9', fontFamily:'inherit', fontSize:14, padding:'8px 12px', outline:'none', width:'100%' }
+  const lbl = { fontSize:12, fontWeight:600, color:'#94a3b8', display:'block', marginBottom:4 }
+  const btnG = { padding:'7px 14px', borderRadius:8, background:'#16a34a', color:'white', border:'none', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }
+  const btnS = { padding:'7px 14px', borderRadius:8, background:'#334155', color:'#f1f5f9', border:'1px solid #475569', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }
+  const btnR = { padding:'5px 10px', borderRadius:6, background:'#dc2626', color:'white', border:'none', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }
+
+  const labelKategori = { paket_bola:'🏸 Paket Bola', qr_transfer:'📱 QR Transfer', turnamen:'🏆 Turnamen', umum:'📢 Umum' }
+
+  return (
+    <div style={{ background:'#1e293b', border:'1px solid #334155', borderRadius:12, overflow:'hidden', marginTop:20 }}>
+      <div style={{ padding:'16px 24px', borderBottom:'1px solid #334155', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
+        <div>
+          <div style={{ fontWeight:700, fontSize:15 }}>📢 Informasi untuk Pemain</div>
+          <div style={{ fontSize:12, color:'#94a3b8', marginTop:2 }}>Tampil di dashboard Beranda pemain — non-aktifkan tanpa hapus kalau sudah tidak relevan</div>
+        </div>
+        <button style={btnG} onClick={() => { setForm(formDefault); setEditId(null); setShowForm(!showForm) }}>
+          {showForm ? '✕ Tutup' : '➕ Tambah'}
+        </button>
+      </div>
+
+      {pesan && (
+        <div style={{ padding:'10px 24px', background:'#0f172a', fontSize:13, fontWeight:600 }}>{pesan}</div>
+      )}
+
+      {showForm && (
+        <div style={{ padding:'16px 24px', background:'#0f172a', borderBottom:'1px solid #334155', display:'flex', flexDirection:'column', gap:12 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:12 }}>
+            <div>
+              <label style={lbl}>Kategori</label>
+              <select style={inp} value={form.kategori} onChange={e => setForm({...form, kategori:e.target.value})}>
+                <option value="umum">Umum</option>
+                <option value="paket_bola">Paket Bola</option>
+                <option value="qr_transfer">QR Transfer</option>
+                <option value="turnamen">Turnamen</option>
+              </select>
+            </div>
+            <div>
+              <label style={lbl}>Judul</label>
+              <input style={inp} placeholder="cth: Transfer ke BCA" value={form.judul} onChange={e => setForm({...form, judul:e.target.value})} />
+            </div>
+          </div>
+          <div>
+            <label style={lbl}>Konten (opsional)</label>
+            <textarea style={{ ...inp, minHeight:70, resize:'vertical' }} placeholder="Detail informasi..." value={form.konten} onChange={e => setForm({...form, konten:e.target.value})} />
+          </div>
+          <div>
+            <label style={lbl}>Gambar (opsional, untuk QR code dll)</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleUploadGambar}
+              disabled={uploading}
+              style={{ ...inp, padding:'6px 12px' }}
+            />
+            {uploading && <div style={{ fontSize:12, color:'#94a3b8', marginTop:6 }}>⏳ Mengupload...</div>}
+            {form.gambar_url && !uploading && (
+              <div style={{ marginTop:10, display:'flex', alignItems:'center', gap:10 }}>
+                <img src={form.gambar_url} alt="Preview" style={{ width:80, height:80, objectFit:'cover', borderRadius:8, border:'1px solid #334155' }} />
+                <button
+                  type="button"
+                  style={{ ...btnS, padding:'5px 10px', fontSize:12 }}
+                  onClick={() => setForm({ ...form, gambar_url:'' })}
+                >
+                  ✕ Hapus Gambar
+                </button>
+              </div>
+            )}
+          </div>
+          <div style={{ display:'flex', justifyContent:'flex-end' }}>
+            <button style={btnG} onClick={simpan}>💾 Simpan</button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ textAlign:'center', padding:32, color:'#94a3b8', fontSize:13 }}>Memuat data...</div>
+      ) : daftar.length === 0 ? (
+        <div style={{ textAlign:'center', padding:32, color:'#94a3b8', fontSize:13 }}>Belum ada informasi. Klik "Tambah" untuk mulai.</div>
+      ) : (
+        <div>
+          {daftar.map(item => (
+            <div key={item.id} style={{ padding:'12px 24px', borderBottom:'1px solid rgba(51,65,85,0.5)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+              <div style={{ flex:1, minWidth:200 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <span style={{ fontSize:11, color:'#64748b' }}>{labelKategori[item.kategori]}</span>
+                  {!item.aktif && <span style={{ fontSize:10, background:'#334155', color:'#94a3b8', padding:'1px 6px', borderRadius:20 }}>Nonaktif</span>}
+                </div>
+                <div style={{ fontWeight:600, fontSize:14 }}>{item.judul}</div>
+              </div>
+              <div style={{ display:'flex', gap:6 }}>
+                <button style={{ ...btnS, padding:'5px 10px', fontSize:12 }} onClick={() => toggleAktif(item)}>
+                  {item.aktif ? 'Sembunyikan' : 'Tampilkan'}
+                </button>
+                <button style={{ ...btnS, padding:'5px 10px', fontSize:12 }} onClick={() => bukaEdit(item)}>Edit</button>
+                <button style={btnR} onClick={() => hapus(item)}>Hapus</button>
+              </div>
             </div>
           ))}
         </div>

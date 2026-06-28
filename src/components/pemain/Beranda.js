@@ -24,6 +24,7 @@ export default function Beranda({ pemainId, nama }) {
   const [belumDibayar, setBelumDibayar] = useState([])
   const [belanja, setBelanja] = useState([])
   const [transaksiTerbuka, setTransaksiTerbuka] = useState(false)
+  const [infoAdmin, setInfoAdmin] = useState([])
 
   async function muatData() {
     setLoading(true)
@@ -77,6 +78,14 @@ export default function Beranda({ pemainId, nama }) {
         .order('created_at', { ascending: false })
       if (errBelanja) throw errBelanja
 
+      // 5. Informasi dari Admin yang sedang aktif ditampilkan
+      const { data: infoRows, error: errInfo } = await supabase
+        .from('info_admin')
+        .select('*')
+        .eq('aktif', true)
+        .order('urutan')
+      if (errInfo) throw errInfo
+
       clearTimeout(timer)
       setSesiAktif(sesiAktifSekarang)
       setMatchSesiIni(matchAktif)
@@ -84,6 +93,7 @@ export default function Beranda({ pemainId, nama }) {
       setRiwayatMatch(riwayat)
       setBelumDibayar(hutangRows || [])
       setBelanja(belanjaRows || [])
+      setInfoAdmin(infoRows || [])
       setLoading(false)
     } catch (err) {
       clearTimeout(timer)
@@ -255,6 +265,29 @@ export default function Beranda({ pemainId, nama }) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── INFORMASI DARI ADMIN — paket bola, QR transfer, turnamen, dll ── */}
+      {infoAdmin.length > 0 && (
+        <div style={{ marginTop:20, display:'flex', flexDirection:'column', gap:12 }}>
+          {infoAdmin.map(info => (
+            <div key={info.id} style={{ background:'#1e293b', border:'1px solid #334155', borderRadius:12, overflow:'hidden' }}>
+              <div style={{ padding:'12px 16px', borderBottom: (info.konten || info.gambar_url) ? '1px solid #334155' : 'none', fontWeight:700, fontSize:14 }}>
+                📢 {info.judul}
+              </div>
+              {info.gambar_url && (
+                <div style={{ padding:16, textAlign:'center' }}>
+                  <img src={info.gambar_url} alt={info.judul} style={{ maxWidth:'100%', borderRadius:8 }} />
+                </div>
+              )}
+              {info.konten && (
+                <div style={{ padding:'12px 16px', fontSize:13, color:'#cbd5e1', lineHeight:1.6, whiteSpace:'pre-wrap' }}>
+                  {info.konten}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
