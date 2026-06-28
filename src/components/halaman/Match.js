@@ -264,6 +264,9 @@ export default function Match() {
 
   // Rekap per pemain, dihitung ulang otomatis tiap matchList/belanjaList berubah (bukan query terpisah)
   const rekapPemain = hitungRekapPemain(matchList, belanjaList, daftarPemain, biayaList)
+  // Subset rekapPemain yang masih punya sisa belum dibayar — dipakai khusus di form Akhiri Sesi,
+  // supaya pemain yang sudah lunas (lewat tombol Bayar di tengah sesi) tidak muncul lagi minta diisi.
+  const rekapBelumLunas = rekapPemain.filter(r => r.sisa_bola_pcs > 0 || r.sisa_belanja > 0)
 
   // ============================================
   // AKSI: MULAI SESI
@@ -591,7 +594,8 @@ export default function Match() {
   // Saat masuk mode Akhiri Sesi, siapkan formBiayaFinal awal dari rekapPemain (biaya kosong, status default 'belum')
   function bukaFormAkhirSesi() {
     const formAwal = {}
-    rekapPemain.forEach(r => {
+    // Hanya pemain dengan sisa belum dibayar yang perlu diisi form-nya; yang sudah lunas dilewati.
+    rekapPemain.filter(r => r.sisa_bola_pcs > 0 || r.sisa_belanja > 0).forEach(r => {
       const paketSaran = cariPaketHarga(daftarPaketHarga, r.sisa_bola_pcs)
       formAwal[r.pemain_id] = {
         biaya: paketSaran ? String(paketSaran.harga) : '',
@@ -611,8 +615,8 @@ export default function Match() {
   }
 
   async function submitAkhirSesi() {
-    // Validasi: semua pemain harus punya biaya terisi
-    const belumLengkap = rekapPemain.some(r => {
+    // Validasi: semua pemain yang masih punya sisa harus punya biaya terisi
+    const belumLengkap = rekapBelumLunas.some(r => {
       const f = formBiayaFinal[r.pemain_id]
       return !f || !f.biaya || parseInt(f.biaya) <= 0
     })
@@ -622,7 +626,7 @@ export default function Match() {
 
     try {
       // Proses tiap pemain SATU PER SATU (berurutan), karena hutang_id baru ada setelah insert hutang sukses
-      for (const r of rekapPemain) {
+      for (const r of rekapBelumLunas) {
         const f = formBiayaFinal[r.pemain_id]
         const biaya = parseInt(f.biaya) || 0
         const bolaBulat = Math.round(r.sisa_bola_pcs)
@@ -1428,16 +1432,21 @@ export default function Match() {
             <div style={{ padding:'16px 20px', borderBottom:'1px solid #334155' }}>
               <div style={{ fontWeight:700, fontSize:15 }}>🏁 Akhiri Sesi — {namaSesi(sesiAktif)}</div>
               <div style={{ fontSize:12, color:'#94a3b8', marginTop:4 }}>Isi biaya final per pemain. Referensi paket harga ditampilkan sebagai panduan — boleh diubah manual.</div>
+              {rekapPemain.length > rekapBelumLunas.length && (
+                <div style={{ fontSize:12, color:'#4ade80', marginTop:8 }}>
+                  ✅ {rekapPemain.length - rekapBelumLunas.length} pemain sudah lunas (dibayar di tengah sesi), tidak perlu diisi ulang.
+                </div>
+              )}
             </div>
 
             <div>
-              {rekapPemain.length === 0 && (
+              {rekapBelumLunas.length === 0 && (
                 <div style={{ textAlign:'center', padding:32, color:'#94a3b8' }}>
                   <div style={{ fontSize:36, marginBottom:8 }}>✅</div>
                   <p>Semua pemain sudah dibayar lunas selama sesi berjalan. Tinggal klik Submit untuk menutup sesi ini.</p>
                 </div>
               )}
-              {rekapPemain.map(r => {
+              {rekapBelumLunas.map(r => {
                 const f = formBiayaFinal[r.pemain_id] || { biaya:'', status:'belum' }
                 const paketSaran = cariPaketHarga(daftarPaketHarga, r.sisa_bola_pcs)
                 return (
@@ -1489,7 +1498,7 @@ export default function Match() {
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:14, marginBottom:8 }}>
                 <span style={{ color:'#94a3b8' }}>Total akan masuk Kas (Lunas):</span>
                 <span style={{ color:'#4ade80', fontWeight:700, fontFamily:'monospace' }}>
-                  {formatRupiah(rekapPemain.reduce((s, r) => {
+                  {formatRupiah(rekapBelumLunas.reduce((s, r) => {
                     const f = formBiayaFinal[r.pemain_id]
                     return f?.status === 'lunas' ? s + (parseInt(f.biaya) || 0) : s
                   }, 0))}
@@ -1498,7 +1507,7 @@ export default function Match() {
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:14 }}>
                 <span style={{ color:'#94a3b8' }}>Total akan masuk Hutang (Belum Bayar):</span>
                 <span style={{ color:'#f59e0b', fontWeight:700, fontFamily:'monospace' }}>
-                  {formatRupiah(rekapPemain.reduce((s, r) => {
+                  {formatRupiah(rekapBelumLunas.reduce((s, r) => {
                     const f = formBiayaFinal[r.pemain_id]
                     return f?.status !== 'lunas' ? s + (parseInt(f?.biaya) || 0) : s
                   }, 0))}
