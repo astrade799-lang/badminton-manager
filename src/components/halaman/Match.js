@@ -597,8 +597,10 @@ export default function Match() {
     // Hanya pemain dengan sisa belum dibayar yang perlu diisi form-nya; yang sudah lunas dilewati.
     rekapPemain.filter(r => r.sisa_bola_pcs > 0 || r.sisa_belanja > 0).forEach(r => {
       const paketSaran = cariPaketHarga(daftarPaketHarga, r.sisa_bola_pcs)
+      // Biaya default = saran harga bola + belanja produk lain (TOTAL, bukan cuma bola)
+      const totalSaran = (paketSaran ? paketSaran.harga : 0) + r.sisa_belanja
       formAwal[r.pemain_id] = {
-        biaya: paketSaran ? String(paketSaran.harga) : '',
+        biaya: totalSaran > 0 ? String(totalSaran) : '',
         status: 'belum',
       }
     })
@@ -1449,6 +1451,7 @@ export default function Match() {
               {rekapBelumLunas.map(r => {
                 const f = formBiayaFinal[r.pemain_id] || { biaya:'', status:'belum' }
                 const paketSaran = cariPaketHarga(daftarPaketHarga, r.sisa_bola_pcs)
+                const totalSaran = (paketSaran ? paketSaran.harga : 0) + r.sisa_belanja
                 return (
                   <div key={r.pemain_id} style={{ padding:isMobile?16:20, borderBottom:'1px solid rgba(51,65,85,0.5)' }}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12, flexWrap:'wrap', gap:8 }}>
@@ -1459,16 +1462,19 @@ export default function Match() {
                           {r.sisa_belanja > 0 && <> · 🛒 {formatRupiah(r.sisa_belanja)}</>}
                         </div>
                       </div>
-                      {paketSaran && (
+                      {totalSaran > 0 && (
                         <div style={{ fontSize:12, color:'#4ade80', background:'#0f172a', padding:'4px 10px', borderRadius:6 }}>
-                          💡 Saran: {paketSaran.label} = {formatRupiah(paketSaran.harga)}
+                          💡 Saran Total: {formatRupiah(totalSaran)}
+                          {paketSaran && r.sisa_belanja > 0 && (
+                            <span style={{ color:'#64748b' }}> ({paketSaran.label} + belanja)</span>
+                          )}
                         </div>
                       )}
                     </div>
 
                     <div style={{ display:'grid', gridTemplateColumns: isMobile?'1fr':'1fr 1fr', gap:12 }}>
                       <div>
-                        <label style={{ ...lbl, fontSize:12 }}>Biaya Bola (Rp)</label>
+                        <label style={{ ...lbl, fontSize:12 }}>Total Biaya (Rp) — bola + belanja</label>
                         <input
                           style={inp} type="number" min="0"
                           value={f.biaya}

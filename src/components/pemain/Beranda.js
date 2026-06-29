@@ -24,6 +24,7 @@ export default function Beranda({ pemainId, nama }) {
   const [belumDibayar, setBelumDibayar] = useState([])
   const [belanja, setBelanja] = useState([])
   const [transaksiTerbuka, setTransaksiTerbuka] = useState(false)
+  const [matchTerbuka, setMatchTerbuka] = useState(null) // id match yang sedang di-expand
   const [infoAdmin, setInfoAdmin] = useState([])
 
   async function muatData() {
@@ -39,7 +40,7 @@ export default function Beranda({ pemainId, nama }) {
       // 1. Cek apakah pemain ini sedang ikut sesi yang masih aktif
       const { data: matchPemainRows, error: errMP } = await supabase
         .from('match_pemain')
-        .select('match:match_id(id, nomor_match, jumlah_bola_pcs, created_at, sesi_main:sesi_main_id(id, tanggal, waktu, status))')
+        .select('match:match_id(id, nomor_match, jumlah_bola_pcs, created_at, sesi_main:sesi_main_id(id, tanggal, waktu, status), match_pemain(pemain:pemain_id(nama)))')
         .eq('pemain_id', pemainId)
       if (errMP) throw errMP
 
@@ -70,10 +71,12 @@ export default function Beranda({ pemainId, nama }) {
         .order('created_at', { ascending: false })
       if (errHutang) throw errHutang
 
-      // 4. Riwayat belanja produk milik pemain ini
+      // 4. Riwayat belanja produk milik pemain ini — ikut ambil status_bayar dari sesi_pemain_biaya
+      // yang ditunjuk, karena "sudah ditandai" (sesi_pemain_biaya_id terisi) BUKAN otomatis berarti
+      // "sudah dibayar" — bisa juga ditandai sebagai 'belum' (masuk hutang, bukan kas).
       const { data: belanjaRows, error: errBelanja } = await supabase
         .from('sesi_belanja')
-        .select('*, stok:produk_id(nama, satuan_kecil)')
+        .select('*, stok:produk_id(nama, satuan_kecil), biaya_terkait:sesi_pemain_biaya_id(status_bayar)')
         .eq('pemain_id', pemainId)
         .order('created_at', { ascending: false })
       if (errBelanja) throw errBelanja
@@ -136,8 +139,6 @@ export default function Beranda({ pemainId, nama }) {
     }, 0)
   }
 
-  const totalBelumDibayar = belumDibayar.reduce((s, h) => s + Math.max(0, h.total_hutang - h.sudah_bayar), 0)
-
   // Gabungkan belanja + belum-dibayar jadi 1 daftar transaksi, dikelompokkan per tanggal
   const grupTransaksi = {}
   belanja.forEach(b => {
@@ -147,7 +148,11 @@ export default function Beranda({ pemainId, nama }) {
       jenis: 'belanja',
       label: `🛒 ${b.stok?.nama || 'Produk'} (${b.jumlah_pcs} ${b.stok?.satuan_kecil || 'pcs'})`,
       nominal: b.total,
-      lunas: true,
+      // Lunas HANYA kalau belanja ini sudah ditandai termasuk dalam pembayaran tertentu
+      // (sesi_pemain_biaya_id terisi) — bukan diasumsikan lunas begitu saja.
+      // Lunas HANYA kalau belanja ini ditandai DAN status pembayaran terkait benar-benar 'lunas'
+      // (bukan sekadar "sudah ditandai" — penandaan juga terjadi untuk status 'belum'/hutang).
+      lunas: b.biaya_terkait?.status_bayar === 'lunas',
     })
   })
   belumDibayar.forEach(h => {
@@ -162,6 +167,12 @@ export default function Beranda({ pemainId, nama }) {
     })
   })
   const daftarTransaksi = Object.values(grupTransaksi).sort((a, b) => b.tanggal.localeCompare(a.tanggal))
+
+  // Total belum dibayar = gabungan SEMUA item (belanja + hutang) yang belum ditandai lunas —
+  // bukan cuma dari tabel hutang saja, supaya badge header akurat mewakili isi accordion.
+  const totalBelumDibayar = daftarTransaksi.reduce((s, grup) => {
+    return s + grup.items.reduce((s2, item) => s2 + (item.lunas ? 0 : item.nominal), 0)
+  }, 0)
 
   return (
     <div>
@@ -212,17 +223,43 @@ export default function Beranda({ pemainId, nama }) {
           <div style={{ textAlign:'center', padding:24, color:'#94a3b8', fontSize:13 }}>Belum pernah ikut match.</div>
         ) : (
           <div>
-            {riwayatMatch.map(m => (
-              <div key={m.id} style={{ padding:'10px 16px', borderBottom:'1px solid rgba(51,65,85,0.5)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                <div>
-                  <div style={{ fontSize:13, fontWeight:600 }}>
-                    Sesi {m.sesi_main?.waktu === 'sore' ? 'Sore' : 'Malam'} · Match #{m.nomor_match}
+            {riwayatMatch.map(m => {
+              const terbuka = matchTerbuka === m.id
+              const namaPemainLain = (m.match_pemain || [])
+                .map(mp => mp.pemain?.nama)
+                .filter(Boolean)
+              return (
+                <div key={m.id} style={{ borderBottom:'1px solid rgba(51,65,85,0.5)' }}>
+                  <div
+                    style={{ padding:'10px 16px', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' }}
+                    onClick={() => setMatchTerbuka(terbuka ? null : m.id)}
+                  >
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:600 }}>
+                        Sesi {m.sesi_main?.waktu === 'sore' ? 'Sore' : 'Malam'} · Match #{m.nomor_match}
+                      </div>
+                      <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{formatTanggal(m.sesi_main?.tanggal)}</div>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <span style={{ fontFamily:'monospace', fontSize:13, color:'#4ade80' }}>{m.jumlah_bola_pcs} bola</span>
+                      <span style={{ color:'#64748b', fontSize:11 }}>{terbuka ? '▲' : '▼'}</span>
+                    </div>
                   </div>
-                  <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{formatTanggal(m.sesi_main?.tanggal)}</div>
+                  {terbuka && (
+                    <div style={{ padding:'0 16px 12px' }}>
+                      <div style={{ fontSize:11, color:'#64748b', marginBottom:6 }}>Pemain yang ikut match ini:</div>
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                        {namaPemainLain.map((nama, i) => (
+                          <span key={i} style={{ background:'#0f172a', padding:'4px 10px', borderRadius:20, fontSize:12, color:'#cbd5e1' }}>
+                            {nama}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <span style={{ fontFamily:'monospace', fontSize:13, color:'#4ade80' }}>{m.jumlah_bola_pcs} bola</span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -253,11 +290,16 @@ export default function Beranda({ pemainId, nama }) {
                   </div>
                   <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                     {grup.items.map((item, i) => (
-                      <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:'#0f172a', borderRadius:6, padding:'8px 10px' }}>
-                        <span style={{ fontSize:13, color:'#cbd5e1' }}>{item.label}</span>
-                        <span style={{ fontFamily:'monospace', fontSize:13, fontWeight:700, color: item.lunas ? '#4ade80' : '#f59e0b' }}>
-                          {formatRupiah(item.nominal)}
-                        </span>
+                      <div key={i} style={{ background:'#0f172a', borderRadius:6, padding:'8px 10px' }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                          <span style={{ fontSize:13, color:'#cbd5e1' }}>{item.label}</span>
+                          <span style={{ fontFamily:'monospace', fontSize:13, fontWeight:700, color: item.lunas ? '#4ade80' : '#f59e0b' }}>
+                            {formatRupiah(item.nominal)}
+                          </span>
+                        </div>
+                        <div style={{ fontSize:11, marginTop:4, color: item.lunas ? '#4ade80' : '#f59e0b' }}>
+                          {item.lunas ? '✅ Lunas' : '⏳ Belum Dibayar'}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -270,7 +312,7 @@ export default function Beranda({ pemainId, nama }) {
 
       {/* ── INFORMASI DARI ADMIN — paket bola, QR transfer, turnamen, dll ── */}
       {infoAdmin.length > 0 && (
-        <div style={{ marginTop:20, display:'flex', flexDirection:'column', gap:12 }}>
+        <div style={{ marginTop:20, display:'flex', flexDirection:'column', gap:12, overflow:'hidden' }}>
           {infoAdmin.map(info => (
             <div key={info.id} style={{ background:'#1e293b', border:'1px solid #334155', borderRadius:12, overflow:'hidden' }}>
               <div style={{ padding:'12px 16px', borderBottom: (info.konten || info.gambar_url) ? '1px solid #334155' : 'none', fontWeight:700, fontSize:14 }}>
