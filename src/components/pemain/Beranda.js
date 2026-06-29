@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
 
 function formatRupiah(n) { return 'Rp ' + Number(n || 0).toLocaleString('id-ID') }
 function formatTanggal(t) {
@@ -14,7 +13,7 @@ function tanggalKunci(timestampAtauTanggal) {
   return timestampAtauTanggal.split('T')[0]
 }
 
-export default function Beranda({ pemainId, nama }) {
+export default function Beranda({ pemainId, nama, token }) {
   const [loading, setLoading] = useState(true)
   const [gagal, setGagal] = useState(false)
   const [sesiAktif, setSesiAktif] = useState(null)
@@ -27,6 +26,10 @@ export default function Beranda({ pemainId, nama }) {
   const [matchTerbuka, setMatchTerbuka] = useState(null) // id match yang sedang di-expand
   const [infoAdmin, setInfoAdmin] = useState([])
 
+  // Semua data Beranda diambil lewat SATU API Route (/api/pemain/data) yang jalan di server
+  // dengan service role key (bypass RLS) — karena Pemain tidak login lewat Supabase Auth,
+  // jadi query langsung dari browser akan selalu ditolak diam-diam oleh RLS policy yang
+  // mensyaratkan auth.role() = 'authenticated' (lihat tabel hutang).
   async function muatData() {
     setLoading(true)
     setGagal(false)
@@ -37,66 +40,26 @@ export default function Beranda({ pemainId, nama }) {
     }, 10000)
 
     try {
-      // 1. Cek apakah pemain ini sedang ikut sesi yang masih aktif
-      const { data: matchPemainRows, error: errMP } = await supabase
-        .from('match_pemain')
-        .select('match:match_id(id, nomor_match, jumlah_bola_pcs, created_at, sesi_main:sesi_main_id(id, tanggal, waktu, status), match_pemain(pemain:pemain_id(nama)))')
-        .eq('pemain_id', pemainId)
-      if (errMP) throw errMP
-
-      const semuaMatch = matchPemainRows.map(r => r.match).filter(Boolean)
-      const matchAktif = semuaMatch.filter(m => m.sesi_main?.status === 'aktif')
-
-      let sesiAktifSekarang = null
-      let biayaSesi = []
-      if (matchAktif.length > 0) {
-        sesiAktifSekarang = matchAktif[0].sesi_main
-        const { data: biayaRows, error: errBiaya } = await supabase
-          .from('sesi_pemain_biaya')
-          .select('*')
-          .eq('sesi_main_id', sesiAktifSekarang.id)
-          .eq('pemain_id', pemainId)
-        if (errBiaya) throw errBiaya
-        biayaSesi = biayaRows || []
-      }
-
-      // 2. Riwayat match terakhir (5 match, urut terbaru)
-      const riwayat = semuaMatch.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5)
-
-      // 3. Catatan belum dibayar milik pemain ini (dari tabel hutang)
-      const { data: hutangRows, error: errHutang } = await supabase
-        .from('hutang')
-        .select('*')
-        .eq('pemain_id', pemainId)
-        .order('created_at', { ascending: false })
-      if (errHutang) throw errHutang
-
-      // 4. Riwayat belanja produk milik pemain ini — ikut ambil status_bayar dari sesi_pemain_biaya
-      // yang ditunjuk, karena "sudah ditandai" (sesi_pemain_biaya_id terisi) BUKAN otomatis berarti
-      // "sudah dibayar" — bisa juga ditandai sebagai 'belum' (masuk hutang, bukan kas).
-      const { data: belanjaRows, error: errBelanja } = await supabase
-        .from('sesi_belanja')
-        .select('*, stok:produk_id(nama, satuan_kecil), biaya_terkait:sesi_pemain_biaya_id(status_bayar)')
-        .eq('pemain_id', pemainId)
-        .order('created_at', { ascending: false })
-      if (errBelanja) throw errBelanja
-
-      // 5. Informasi dari Admin yang sedang aktif ditampilkan
-      const { data: infoRows, error: errInfo } = await supabase
-        .from('info_admin')
-        .select('*')
-        .eq('aktif', true)
-        .order('urutan')
-      if (errInfo) throw errInfo
-
+      const res = await fetch('/api/pemain/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      })
+      const data = await res.json()
       clearTimeout(timer)
+
+      if (!res.ok) throw new Error(data.error || 'Gagal memuat data')
+
+      const sesiAktifSekarang = data.matchAktif.length > 0 ? data.matchAktif[0].sesi_main : null
+      const riwayat = data.semuaMatch.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5)
+
       setSesiAktif(sesiAktifSekarang)
-      setMatchSesiIni(matchAktif)
-      setBiayaSesiIni(biayaSesi)
+      setMatchSesiIni(data.matchAktif)
+      setBiayaSesiIni(data.biayaSesiIni)
       setRiwayatMatch(riwayat)
-      setBelumDibayar(hutangRows || [])
-      setBelanja(belanjaRows || [])
-      setInfoAdmin(infoRows || [])
+      setBelumDibayar(data.hutang)
+      setBelanja(data.belanja)
+      setInfoAdmin(data.infoAdmin)
       setLoading(false)
     } catch (err) {
       clearTimeout(timer)
@@ -106,8 +69,8 @@ export default function Beranda({ pemainId, nama }) {
   }
 
   useEffect(() => {
-    if (pemainId) muatData()
-  }, [pemainId])
+    if (pemainId && token) muatData()
+  }, [pemainId, token])
 
   if (loading) {
     return <div style={{ textAlign:'center', padding:40, color:'#94a3b8' }}>⏳ Memuat...</div>
@@ -312,7 +275,7 @@ export default function Beranda({ pemainId, nama }) {
 
       {/* ── INFORMASI DARI ADMIN — paket bola, QR transfer, turnamen, dll ── */}
       {infoAdmin.length > 0 && (
-        <div style={{ marginTop:20, display:'flex', flexDirection:'column', gap:12, overflow:'hidden' }}>
+        <div style={{ marginTop:20, display:'flex', flexDirection:'column', gap:12 }}>
           {infoAdmin.map(info => (
             <div key={info.id} style={{ background:'#1e293b', border:'1px solid #334155', borderRadius:12, overflow:'hidden' }}>
               <div style={{ padding:'12px 16px', borderBottom: (info.konten || info.gambar_url) ? '1px solid #334155' : 'none', fontWeight:700, fontSize:14 }}>

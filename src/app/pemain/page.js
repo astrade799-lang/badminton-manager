@@ -83,7 +83,7 @@ export default function PemainPage() {
   if (status === 'wajib-ganti-pin') return <GantiPin token={token} onSelesai={handleGantiPinSelesai} wajib />
 
   const halaman = {
-    beranda: <Beranda pemainId={pemain.pemain_id} nama={pemain.nama} />,
+    beranda: <Beranda pemainId={pemain.pemain_id} nama={pemain.nama} token={token} />,
     match:   <MatchSaya pemainId={pemain.pemain_id} />,
     akun:    <SettingAkun pemain={pemain} token={token} />,
   }
