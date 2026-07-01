@@ -140,6 +140,7 @@ export default function Match() {
   const [daftarProdukJual, setDaftarProdukJual] = useState([]) // untuk form belanja
   const [daftarPaketHarga, setDaftarPaketHarga] = useState([])
   const [historySesi, setHistorySesi] = useState([])
+  const [sesiDetailTerbuka, setSesiDetailTerbuka] = useState(null) // id sesi yang sedang di-expand
 
   // ── Kotak utama: penentu "wajah" mana yang tampil ──
   const [sesiAktif, setSesiAktif] = useState(null) // null = belum ada sesi aktif
@@ -249,7 +250,7 @@ export default function Match() {
   async function muatHistory() {
     const { data, error } = await supabase
       .from('sesi_main')
-      .select('*, stok:produk_shuttle_id(nama), match(id, jumlah_bola_pcs), sesi_pemain_biaya(id, biaya, status_bayar)')
+      .select('*, stok:produk_shuttle_id(nama), match(id, jumlah_bola_pcs), sesi_pemain_biaya(id, biaya, status_bayar, pemain:pemain_id(nama))')
       .eq('status', 'selesai')
       .order('tanggal', { ascending: false })
       .limit(50)
@@ -875,22 +876,75 @@ export default function Match() {
                     const totalMatch = s.match?.length || 0
                     const totalBolaSesi = (s.match || []).reduce((sum, m) => sum + m.jumlah_bola_pcs, 0)
                     const biayaRows = s.sesi_pemain_biaya || []
-                    const totalPemasukan = biayaRows.reduce((sum, b) => sum + (b.biaya || 0), 0)
+                    const totalPemasukan = biayaRows.filter(b => b.status_bayar === 'lunas').reduce((sum, b) => sum + (b.biaya || 0), 0)
                     const adaBelumBayar = biayaRows.some(b => b.status_bayar !== 'lunas')
+                    const terbuka = sesiDetailTerbuka === s.id
                     return (
-                      <div key={s.id} style={{ padding:'14px 20px', borderBottom:'1px solid rgba(51,65,85,0.5)' }}>
-                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:8 }}>
+                      <div key={s.id} style={{ borderBottom:'1px solid rgba(51,65,85,0.5)' }}>
+                        {/* Header baris sesi — klik untuk expand */}
+                        <div
+                          style={{ padding:'14px 20px', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:8 }}
+                          onClick={() => setSesiDetailTerbuka(terbuka ? null : s.id)}
+                        >
                           <div>
                             <div style={{ fontWeight:700, fontSize:14 }}>{namaSesi(s)}</div>
                             <div style={{ fontSize:12, color:'#94a3b8', marginTop:4, fontFamily:'monospace' }}>
                               {biayaRows.length} pemain · {totalMatch} match · {totalBolaSesi} bola · {s.stok?.nama}
                             </div>
                           </div>
-                          <div style={{ textAlign:'right' }}>
-                            <div style={{ fontWeight:700, color:'#4ade80', fontFamily:'monospace' }}>{formatRupiah(totalPemasukan)}</div>
-                            {adaBelumBayar && <span style={{ fontSize:11, color:'#f59e0b' }}>⚠️ ada yang belum bayar</span>}
+                          <div style={{ textAlign:'right', display:'flex', alignItems:'center', gap:10 }}>
+                            <div>
+                              <div style={{ fontWeight:700, color:'#4ade80', fontFamily:'monospace' }}>{formatRupiah(totalPemasukan)}</div>
+                              {adaBelumBayar && <span style={{ fontSize:11, color:'#f59e0b' }}>⚠️ ada yang belum bayar</span>}
+                            </div>
+                            <span style={{ color:'#64748b', fontSize:12 }}>{terbuka ? '▲' : '▼'}</span>
                           </div>
                         </div>
+
+                        {/* Detail per pemain — muncul saat diklik */}
+                        {terbuka && (
+                          <div style={{ padding:'0 20px 16px' }}>
+                            {biayaRows.length === 0 ? (
+                              <div style={{ fontSize:13, color:'#64748b' }}>Tidak ada data pembayaran.</div>
+                            ) : (
+                              <div style={{ background:'#0f172a', borderRadius:8, overflow:'hidden' }}>
+                                {biayaRows.map(b => (
+                                  <div key={b.id} style={{ padding:'10px 14px', borderBottom:'1px solid rgba(51,65,85,0.3)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
+                                    <div style={{ flex:1, minWidth:0 }}>
+                                      <div style={{ fontSize:13, fontWeight:600 }}>{b.pemain?.nama || '–'}</div>
+                                    </div>
+                                    <div style={{ textAlign:'right' }}>
+                                      <div style={{ fontFamily:'monospace', fontSize:13, fontWeight:700, color: b.status_bayar === 'lunas' ? '#4ade80' : '#f59e0b' }}>
+                                        {formatRupiah(b.biaya)}
+                                      </div>
+                                      <span style={{
+                                        fontSize:10, fontWeight:700,
+                                        background: b.status_bayar === 'lunas' ? '#14532d' : '#78350f',
+                                        color: b.status_bayar === 'lunas' ? '#4ade80' : '#fbbf24',
+                                        padding:'1px 6px', borderRadius:20
+                                      }}>
+                                        {b.status_bayar === 'lunas' ? '✅ Lunas' : '⏳ Belum Bayar'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                                {/* Ringkasan total di bawah */}
+                                <div style={{ padding:'10px 14px', display:'flex', justifyContent:'space-between', fontSize:12, color:'#94a3b8', borderTop:'1px solid rgba(51,65,85,0.5)' }}>
+                                  <span>Total masuk kas</span>
+                                  <span style={{ fontFamily:'monospace', color:'#4ade80', fontWeight:700 }}>{formatRupiah(totalPemasukan)}</span>
+                                </div>
+                                {adaBelumBayar && (
+                                  <div style={{ padding:'6px 14px 10px', display:'flex', justifyContent:'space-between', fontSize:12 }}>
+                                    <span style={{ color:'#94a3b8' }}>Masuk hutang</span>
+                                    <span style={{ fontFamily:'monospace', color:'#f59e0b', fontWeight:700 }}>
+                                      {formatRupiah(biayaRows.filter(b => b.status_bayar !== 'lunas').reduce((s, b) => s + b.biaya, 0))}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
