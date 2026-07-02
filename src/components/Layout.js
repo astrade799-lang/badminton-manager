@@ -141,7 +141,7 @@ export default function Layout() {
   const halaman = {
     ringkasan:  <Ringkasan onNavigate={setAktif} />,
     stok:       <Stok isAdmin={isAdmin} />,
-    transaksi:  <Transaksi />,
+    transaksi:  <Transaksi isAdmin={isAdmin} />,
     match:      <Match />,
     pemain:     <Pemain />,
     hutang:     <Hutang />,
