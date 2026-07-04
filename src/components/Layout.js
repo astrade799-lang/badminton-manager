@@ -141,7 +141,7 @@ export default function Layout() {
   const halaman = {
     ringkasan:  <Ringkasan onNavigate={setAktif} />,
     stok:       <Stok isAdmin={isAdmin} />,
-    transaksi:  <Transaksi isAdmin={isAdmin} />,
+    transaksi:  <Transaksi />,
     match:      <Match />,
     pemain:     <Pemain />,
     hutang:     <Hutang />,
@@ -628,6 +628,12 @@ function InfoAdminPemain() {
     muatData()
   }
 
+  async function toggleLanding(item) {
+    const { error } = await supabase.from('info_admin').update({ tampil_di_landing: !item.tampil_di_landing }).eq('id', item.id)
+    if (error) { tampilPesan('❌ ' + error.message); return }
+    muatData()
+  }
+
   async function hapus(item) {
     if (!confirm(`Hapus info "${item.judul}"?`)) return
     const { error } = await supabase.from('info_admin').delete().eq('id', item.id)
@@ -722,12 +728,16 @@ function InfoAdminPemain() {
                 <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                   <span style={{ fontSize:11, color:'#64748b' }}>{labelKategori[item.kategori]}</span>
                   {!item.aktif && <span style={{ fontSize:10, background:'#334155', color:'#94a3b8', padding:'1px 6px', borderRadius:20 }}>Nonaktif</span>}
+                  {item.tampil_di_landing && <span style={{ fontSize:10, background:'#1e3a5f', color:'#60a5fa', padding:'1px 6px', borderRadius:20 }}>🌐 Landing</span>}
                 </div>
                 <div style={{ fontWeight:600, fontSize:14 }}>{item.judul}</div>
               </div>
-              <div style={{ display:'flex', gap:6 }}>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                 <button style={{ ...btnS, padding:'5px 10px', fontSize:12 }} onClick={() => toggleAktif(item)}>
                   {item.aktif ? 'Sembunyikan' : 'Tampilkan'}
+                </button>
+                <button style={{ ...btnS, padding:'5px 10px', fontSize:12, color: item.tampil_di_landing ? '#60a5fa' : '#94a3b8' }} onClick={() => toggleLanding(item)}>
+                  {item.tampil_di_landing ? '🌐 Di Landing' : '🌐 + Landing'}
                 </button>
                 <button style={{ ...btnS, padding:'5px 10px', fontSize:12 }} onClick={() => bukaEdit(item)}>Edit</button>
                 <button style={btnR} onClick={() => hapus(item)}>Hapus</button>
