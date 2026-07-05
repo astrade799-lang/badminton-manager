@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 
-// ── HOOK: scroll position untuk efek parallax & navbar ──
 function useScrollY() {
   const [scrollY, setScrollY] = useState(0)
   useEffect(() => {
@@ -13,7 +12,6 @@ function useScrollY() {
   return scrollY
 }
 
-// ── HOOK: intersection observer untuk animasi masuk ──
 function useInView(threshold = 0.15) {
   const ref = useRef(null)
   const [inView, setInView] = useState(false)
@@ -23,6 +21,36 @@ function useInView(threshold = 0.15) {
     return () => obs.disconnect()
   }, [])
   return [ref, inView]
+}
+
+function useTypewriter(words, speed = 80, pause = 2000) {
+  const [text, setText] = useState('')
+  const [wordIdx, setWordIdx] = useState(0)
+  const [charIdx, setCharIdx] = useState(0)
+  const [deleting, setDeleting] = useState(false)
+  useEffect(() => {
+    const word = words[wordIdx]
+    const timeout = setTimeout(() => {
+      if (!deleting) {
+        setText(word.slice(0, charIdx + 1))
+        if (charIdx + 1 === word.length) {
+          setTimeout(() => setDeleting(true), pause)
+        } else {
+          setCharIdx(c => c + 1)
+        }
+      } else {
+        setText(word.slice(0, charIdx - 1))
+        if (charIdx === 0) {
+          setDeleting(false)
+          setWordIdx(i => (i + 1) % words.length)
+        } else {
+          setCharIdx(c => c - 1)
+        }
+      }
+    }, deleting ? speed / 2 : speed)
+    return () => clearTimeout(timeout)
+  }, [text, deleting, charIdx, wordIdx])
+  return text
 }
 
 const labelKategori = {
@@ -36,9 +64,11 @@ export default function LandingPage() {
   const scrollY = useScrollY()
   const [infoList, setInfoList] = useState([])
   const [infoTerbuka, setInfoTerbuka] = useState(null)
+  const [mouse, setMouse] = useState({ x: 0, y: 0 })
   const [heroRef, heroInView] = useInView(0.1)
   const [infoRef, infoInView] = useInView(0.1)
   const [mapsRef, mapsInView] = useInView(0.1)
+  const typedText = useTypewriter([ 'BadmintonClub','Kompetitif', 'Aktif', 'Solid', 'Berprestasi'], 90, 1500)
 
   useEffect(() => {
     async function muatInfo() {
@@ -53,237 +83,300 @@ export default function LandingPage() {
     muatInfo()
   }, [])
 
+  useEffect(() => {
+    const handler = (e) => setMouse({ x: e.clientX, y: e.clientY })
+    window.addEventListener('mousemove', handler)
+    return () => window.removeEventListener('mousemove', handler)
+  }, [])
+
   const navOpak = scrollY > 60
 
+  function scrollKeInfo(e) {
+    e.preventDefault()
+    const el = document.getElementById('informasi')
+    if (el) el.scrollIntoView({ behavior: 'smooth' })
+    else window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })
+  }
+
   return (
-    <div style={{ minHeight:'100vh', background:'#050a14', fontFamily:"'Plus Jakarta Sans', sans-serif", color:'#f1f5f9', overflowX:'hidden' }}>
+    <div style={{ minHeight:'100vh', background:'#050a14', fontFamily:"'Plus Jakarta Sans', system-ui, sans-serif", color:'#f1f5f9', overflowX:'hidden' }}>
+
+      {/* ── CURSOR GLOW EFFECT ── */}
+      <div style={{
+        position:'fixed', pointerEvents:'none', zIndex:9999,
+        width:400, height:400, borderRadius:'50%',
+        background:'radial-gradient(circle, rgba(22,163,74,0.06) 0%, transparent 70%)',
+        left: mouse.x - 200, top: mouse.y - 200,
+        transition:'left 0.1s ease-out, top 0.1s ease-out',
+      }} />
 
       {/* ── NAVBAR ── */}
       <nav style={{
         position:'fixed', top:0, left:0, right:0, zIndex:100,
-        padding:'0 24px', height:64,
+        padding:'0 32px', height:64,
         display:'flex', alignItems:'center', justifyContent:'space-between',
-        background: navOpak ? 'rgba(5,10,20,0.92)' : 'transparent',
-        backdropFilter: navOpak ? 'blur(16px)' : 'none',
-        borderBottom: navOpak ? '1px solid rgba(255,255,255,0.06)' : 'none',
+        background: navOpak ? 'rgba(5,10,20,0.85)' : 'transparent',
+        backdropFilter: navOpak ? 'blur(20px)' : 'none',
+        borderBottom: navOpak ? '1px solid rgba(255,255,255,0.05)' : 'none',
         transition:'all 0.4s ease',
       }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <span style={{ fontSize:28 }}>🏸</span>
+          <span style={{ fontSize:26 }}>🏸</span>
           <span style={{ fontWeight:800, fontSize:16, letterSpacing:-0.3 }}>
             Garuda <span style={{ color:'#16a34a' }}>Takalala</span>
           </span>
         </div>
-        <a
-          href="/pemain"
-          style={{
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <button onClick={scrollKeInfo} style={{
+            padding:'8px 18px', borderRadius:40, fontSize:13, fontWeight:600,
+            background:'transparent', border:'1px solid rgba(255,255,255,0.15)',
+            color:'#94a3b8', cursor:'pointer', fontFamily:'inherit',
+          }}>Info</button>
+          <a href="#lokasi" onClick={(e)=>{ e.preventDefault(); document.getElementById('lokasi')?.scrollIntoView({behavior:'smooth'}) }} style={{
+            padding:'8px 18px', borderRadius:40, fontSize:13, fontWeight:600,
+            background:'transparent', border:'1px solid rgba(255,255,255,0.15)',
+            color:'#94a3b8', cursor:'pointer', textDecoration:'none',
+          }}>Lokasi</a>
+          <a href="/pemain" style={{
             padding:'8px 20px', borderRadius:40, fontSize:13, fontWeight:700,
             background:'#16a34a', color:'white', textDecoration:'none',
-            boxShadow:'0 0 20px rgba(22,163,74,0.4)',
-            transition:'all 0.2s',
-          }}
-        >
-          Masuk sebagai Pemain →
-        </a>
+            boxShadow:'0 0 20px rgba(22,163,74,0.3)',
+          }}>Login Pemain →</a>
+        </div>
       </nav>
 
       {/* ── HERO SECTION ── */}
       <section style={{ position:'relative', height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden' }}>
 
-        {/* Background image dengan parallax */}
+        {/* ── GANTI GAMBAR DI SINI: ubah URL backgroundImage di bawah ini ── */}
         <div style={{
           position:'absolute', inset:0,
-          backgroundImage:`url('https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?w=1920&q=80')`,
-          backgroundSize:'cover',
-          backgroundPosition:'center',
-          transform:`translateY(${scrollY * 0.3}px)`,
-          filter:'brightness(0.3)',
+          backgroundImage:`url('https://barae.desa.id/wp-content/uploads/2026/07/bgDeks7.png')`,
+          backgroundSize:'cover', backgroundPosition:'center',
+          transform:`translateY(${scrollY * 0.25}px)`,
+          filter:'brightness(0.75) saturate(1.2)',
         }} />
 
-        {/* Gradient overlay */}
+        {/* Animated gradient overlay */}
         <div style={{
           position:'absolute', inset:0,
-          background:'linear-gradient(180deg, rgba(5,10,20,0.2) 0%, rgba(5,10,20,0.6) 60%, rgba(5,10,20,1) 100%)',
+          background:'linear-gradient(135deg, rgba(5,10,20,0.8) 0%, rgba(5,30,15,0.4) 50%, rgba(5,10,20,0.9) 100%)',
         }} />
 
-        {/* Partikel dekoratif */}
-        {[...Array(6)].map((_, i) => (
+        {/* Grid lines dekoratif */}
+        <div style={{
+          position:'absolute', inset:0, opacity:0.04,
+          backgroundImage:'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
+          backgroundSize:'80px 80px',
+        }} />
+
+        {/* Partikel mengambang */}
+        {[...Array(8)].map((_, i) => (
           <div key={i} style={{
             position:'absolute',
-            width: 3 + (i % 3) * 2,
-            height: 3 + (i % 3) * 2,
+            width: 2 + (i % 4),
+            height: 2 + (i % 4),
             borderRadius:'50%',
-            background:'#16a34a',
-            opacity: 0.4 + (i * 0.08),
-            top: `${15 + i * 12}%`,
-            left: `${8 + i * 14}%`,
-            boxShadow:'0 0 10px rgba(22,163,74,0.8)',
-            animation:`float${i % 2} ${3 + i}s ease-in-out infinite`,
+            background: i % 2 === 0 ? '#4ade80' : '#16a34a',
+            opacity: 0.5 + (i * 0.05),
+            top: `${10 + i * 10}%`,
+            left: `${5 + i * 11}%`,
+            boxShadow:`0 0 ${6 + i * 2}px rgba(74,222,128,0.8)`,
+            animation:`floatParticle ${3 + (i % 3)}s ease-in-out infinite`,
+            animationDelay:`${i * 0.4}s`,
           }} />
         ))}
 
         {/* Konten Hero */}
         <div ref={heroRef} style={{
-          position:'relative', textAlign:'center', padding:'0 24px', maxWidth:700,
-          transform: heroInView ? 'translateY(0)' : 'translateY(40px)',
+          position:'relative', textAlign:'center', padding:'0 24px', maxWidth:800,
+          transform: heroInView ? 'translateY(0)' : 'translateY(50px)',
           opacity: heroInView ? 1 : 0,
-          transition:'all 0.9s cubic-bezier(0.16,1,0.3,1)',
+          transition:'all 3s cubic-bezier(0.16,1,0.3,1)',
         }}>
-          {/* Badge */}
           <div style={{
             display:'inline-flex', alignItems:'center', gap:8,
-            padding:'6px 16px', borderRadius:40,
-            background:'rgba(22,163,74,0.15)', border:'1px solid rgba(22,163,74,0.3)',
-            fontSize:12, color:'#4ade80', fontWeight:600, marginBottom:24,
+            padding:'6px 18px', borderRadius:40, marginBottom:28,
+            background:'rgba(22,163,74,0.12)', border:'1px solid rgba(22,163,74,0.25)',
+            fontSize:12, color:'#4ade80', fontWeight:600,
             backdropFilter:'blur(10px)',
           }}>
-            <span style={{ width:6, height:6, borderRadius:'50%', background:'#4ade80', display:'inline-block', boxShadow:'0 0 8px #4ade80' }} />
-            Lapangan Aktif · Bergabunglah Sekarang
+            <span style={{ width:6, height:6, borderRadius:'50%', background:'#4ade80', display:'inline-block', boxShadow:'0 0 8px #4ade80', animation:'pulse 2s ease-in-out infinite' }} />
+            Badminton Club · Takalala
           </div>
 
           <h1 style={{
-            fontSize:'clamp(2.4rem, 7vw, 4.5rem)',
-            fontWeight:900, lineHeight:1.05,
-            letterSpacing:'-2px', marginBottom:20,
+            fontSize:'clamp(1.7rem, 7vw, 5rem)',
+            fontWeight:800, lineHeight:1.05,
+            letterSpacing:'-2px', marginBottom:16,
           }}>
-            Badminton Club<br />
+            GARUDA TAKALALA
+            <br />
             <span style={{
-              background:'linear-gradient(135deg, #16a34a, #4ade80)',
+              background:'linear-gradient(135deg, #16a34a 0%, #4ade80 50%, #86efac 100%)',
               WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent',
+              backgroundSize:'200% auto',
+              animation:'shimmer 1s linear infinite',
             }}>
-              Garuda Takalala
+              {typedText}
+              <span style={{ animation:'blink 10s step-end infinite', color:'#4ade80' }}>|</span>
             </span>
           </h1>
 
           <p style={{
-            fontSize:'clamp(1rem, 2vw, 1.15rem)',
-            color:'#94a3b8', lineHeight:1.7, marginBottom:40, maxWidth:520, margin:'0 auto 40px',
+            fontSize:'clamp(1.2rem, 2vw, 1.15rem)',
+            color:'#d4ddebff', lineHeight:1.8, marginBottom:48,
+            maxWidth:700, margin:'0 auto 48px',
           }}>
-            Komunitas bulutangkis yang aktif dan kompetitif. Bergabung, main, dan pantau progress permainanmu langsung dari aplikasi.
+            Garuda Takalala — tempat para pecinta bulutangkis berkumpul, bersaing, dan berkembang bersama.
           </p>
-
+{/* 
           <div style={{ display:'flex', gap:12, justifyContent:'center', flexWrap:'wrap' }}>
-            <a href="/pemain" style={{
-              padding:'14px 32px', borderRadius:40, fontSize:15, fontWeight:700,
+            <button onClick={scrollKeInfo} style={{
+              padding:'14px 36px', borderRadius:40, fontSize:15, fontWeight:700,
               background:'linear-gradient(135deg, #16a34a, #15803d)',
-              color:'white', textDecoration:'none',
+              color:'white', border:'none', cursor:'pointer', fontFamily:'inherit',
               boxShadow:'0 8px 32px rgba(22,163,74,0.4)',
-              transition:'all 0.2s',
-            }}>
-              🏸 Login Pemain
-            </a>
-            <a href="#informasi" style={{
-              padding:'14px 32px', borderRadius:40, fontSize:15, fontWeight:700,
-              background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.15)',
+              transition:'transform 0.2s, box-shadow 0.2s',
+            }}
+            onMouseEnter={e=>{ e.target.style.transform='translateY(-2px)'; e.target.style.boxShadow='0 12px 40px rgba(22,163,74,0.5)' }}
+            onMouseLeave={e=>{ e.target.style.transform='translateY(0)'; e.target.style.boxShadow='0 8px 32px rgba(22,163,74,0.4)' }}
+            >
+              Lihat Informasi ↓
+            </button>
+            <a href="#lokasi" onClick={(e)=>{ e.preventDefault(); document.getElementById('lokasi')?.scrollIntoView({behavior:'smooth'}) }} style={{
+              padding:'14px 36px', borderRadius:40, fontSize:15, fontWeight:700,
+              background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)',
               color:'white', textDecoration:'none', backdropFilter:'blur(10px)',
-            }}>
-              Lihat Info →
+              transition:'background 0.2s',
+            }}
+            onMouseEnter={e=>e.target.style.background='rgba(255,255,255,0.1)'}
+            onMouseLeave={e=>e.target.style.background='rgba(255,255,255,0.06)'}
+            >
+              📍 Lokasi
             </a>
           </div>
+Scroll indicator */}
+
         </div>
 
         {/* Scroll indicator */}
         <div style={{
           position:'absolute', bottom:32, left:'50%', transform:'translateX(-50%)',
           display:'flex', flexDirection:'column', alignItems:'center', gap:8,
-          opacity: scrollY > 100 ? 0 : 1, transition:'opacity 0.3s',
+          opacity: scrollY > 80 ? 0 : 1, transition:'opacity 0.3s',
         }}>
-          <span style={{ fontSize:11, color:'#475569', letterSpacing:2 }}>SCROLL</span>
-          <div style={{
-            width:1, height:40,
-            background:'linear-gradient(180deg, #475569, transparent)',
-            animation:'scrollLine 1.5s ease-in-out infinite',
-          }} />
+          <span style={{ fontSize:10, color:'#334155', letterSpacing:3 }}>SCROLL</span>
+          <div style={{ width:1, height:40, background:'linear-gradient(180deg, #334155, transparent)', animation:'scrollDown 1.5s ease-in-out infinite' }} />
         </div>
       </section>
 
-      {/* ── STATS BAR ── */}
-      <section style={{ padding:'40px 24px', background:'rgba(22,163,74,0.05)', borderTop:'1px solid rgba(22,163,74,0.1)', borderBottom:'1px solid rgba(22,163,74,0.1)' }}>
-        <div style={{ maxWidth:900, margin:'0 auto', display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:24, textAlign:'center' }}>
+      {/* ── STATS ── */}
+      <section style={{
+        padding:'48px 32px',
+        background:'linear-gradient(180deg, rgba(5,10,20,1) 0%, rgba(5,20,10,0.3) 50%, rgba(5,10,20,1) 100%)',
+        borderTop:'1px solid rgba(22,163,74,0.1)',
+        borderBottom:'1px solid rgba(22,163,74,0.1)',
+      }}>
+        <div style={{ maxWidth:800, margin:'0 auto', display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:24, textAlign:'center' }}>
           {[
-            { angka:'🏸', label:'Lapangan Aktif' },
-            { angka:'⚡', label:'Sesi Rutin Harian' },
-            { angka:'🏆', label:'Komunitas Kompetitif' },
+            { icon:'🏸', label:'Lapangan Aktif', sub:'Tersedia setiap hari' },
+            { icon:'⚡', label:'Sesi Rutin', sub:'Sore & Malam' },
+            { icon:'🏆', label:'Kompetitif', sub:'Turnamen berkala' },
           ].map((s, i) => (
-            <div key={i}>
-              <div style={{ fontSize:32, marginBottom:6 }}>{s.angka}</div>
-              <div style={{ fontSize:13, color:'#64748b', fontWeight:600 }}>{s.label}</div>
+            <div key={i} style={{ padding:'8px 0' }}>
+              <div style={{ fontSize:36, marginBottom:8 }}>{s.icon}</div>
+              <div style={{ fontSize:14, fontWeight:700, marginBottom:4 }}>{s.label}</div>
+              <div style={{ fontSize:12, color:'#475569' }}>{s.sub}</div>
             </div>
           ))}
         </div>
       </section>
 
       {/* ── INFORMASI SECTION ── */}
-      {infoList.length > 0 && (
-        <section id="informasi" style={{ padding:'80px 24px' }}>
-          <div style={{ maxWidth:800, margin:'0 auto' }}>
-            <div ref={infoRef} style={{
-              textAlign:'center', marginBottom:48,
-              transform: infoInView ? 'translateY(0)' : 'translateY(30px)',
-              opacity: infoInView ? 1 : 0,
-              transition:'all 0.7s cubic-bezier(0.16,1,0.3,1)',
-            }}>
-              <div style={{ fontSize:12, letterSpacing:3, color:'#16a34a', fontWeight:700, marginBottom:12 }}>INFORMASI</div>
-              <h2 style={{ fontSize:'clamp(1.6rem,4vw,2.4rem)', fontWeight:800, letterSpacing:-1 }}>Info & Pengumuman</h2>
-            </div>
+      <section id="informasi" style={{ padding:'100px 24px' }}>
+        <div style={{ maxWidth:760, margin:'0 auto' }}>
+          <div ref={infoRef} style={{
+            textAlign:'center', marginBottom:56,
+            transform: infoInView ? 'translateY(0)' : 'translateY(30px)',
+            opacity: infoInView ? 1 : 0,
+            transition:'all 0.8s cubic-bezier(0.16,1,0.3,1)',
+          }}>
+            <div style={{ fontSize:11, letterSpacing:4, color:'#16a34a', fontWeight:700, marginBottom:14 }}>INFORMASI</div>
+            <h2 style={{ fontSize:'clamp(1.8rem,4vw,2.6rem)', fontWeight:800, letterSpacing:-1, marginBottom:14 }}>
+              Info & Pengumuman
+            </h2>
+            <p style={{ color:'#475569', fontSize:14 }}>Klik kartu di bawah untuk melihat detail informasi</p>
+          </div>
 
-            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          {infoList.length === 0 ? (
+            <div style={{
+              textAlign:'center', padding:'60px 24px',
+              background:'rgba(30,41,59,0.4)', borderRadius:20,
+              border:'1px solid rgba(51,65,85,0.3)',
+              color:'#475569', fontSize:14,
+            }}>
+              Belum ada informasi yang dipublikasikan.<br />
+              <span style={{ fontSize:12, color:'#334155', marginTop:8, display:'block' }}>
+                (Admin: aktifkan info dan toggle "🌐 + Landing" di Pengaturan)
+              </span>
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
               {infoList.map((info, i) => (
-                <div
-                  key={info.id}
-                  style={{
-                    background:'rgba(30,41,59,0.6)',
-                    border: infoTerbuka === info.id ? '1px solid rgba(22,163,74,0.4)' : '1px solid rgba(51,65,85,0.5)',
-                    borderRadius:16, overflow:'hidden',
-                    backdropFilter:'blur(10px)',
-                    transition:'border-color 0.3s',
-                    transform: infoInView ? 'translateY(0)' : 'translateY(30px)',
-                    opacity: infoInView ? 1 : 0,
-                    transition:`all 0.6s cubic-bezier(0.16,1,0.3,1) ${i * 0.08}s`,
-                  }}
-                >
-                  {/* Header accordion */}
+                <div key={info.id} style={{
+                  background: infoTerbuka === info.id ? 'rgba(22,163,74,0.06)' : 'rgba(15,23,42,0.8)',
+                  border: infoTerbuka === info.id ? '1px solid rgba(22,163,74,0.35)' : '1px solid rgba(51,65,85,0.4)',
+                  borderRadius:16, overflow:'hidden',
+                  backdropFilter:'blur(12px)',
+                  transform: infoInView ? 'translateY(0)' : 'translateY(20px)',
+                  opacity: infoInView ? 1 : 0,
+                  transition:`transform 0.6s cubic-bezier(0.16,1,0.3,1) ${i*0.07}s, opacity 0.6s ease ${i*0.07}s, border-color 0.3s, background 0.3s`,
+                  boxShadow: infoTerbuka === info.id ? '0 0 30px rgba(22,163,74,0.08)' : 'none',
+                }}>
                   <div
                     style={{ padding:'18px 24px', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', userSelect:'none' }}
                     onClick={() => setInfoTerbuka(infoTerbuka === info.id ? null : info.id)}
                   >
                     <div style={{ display:'flex', alignItems:'center', gap:12 }}>
                       <span style={{
-                        fontSize:11, fontWeight:700, padding:'3px 10px', borderRadius:20,
-                        background:'rgba(22,163,74,0.15)', color:'#4ade80',
+                        fontSize:11, fontWeight:700, padding:'3px 12px', borderRadius:20,
+                        background: infoTerbuka === info.id ? 'rgba(22,163,74,0.2)' : 'rgba(255,255,255,0.06)',
+                        color: infoTerbuka === info.id ? '#4ade80' : '#64748b',
+                        transition:'all 0.3s',
                       }}>
                         {labelKategori[info.kategori] || '📢 Info'}
                       </span>
-                      <span style={{ fontWeight:700, fontSize:15 }}>{info.judul}</span>
+                      <span style={{ fontWeight:700, fontSize:15, color: infoTerbuka === info.id ? '#f1f5f9' : '#cbd5e1' }}>
+                        {info.judul}
+                      </span>
                     </div>
                     <div style={{
-                      width:28, height:28, borderRadius:'50%',
-                      background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)',
-                      display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, flexShrink:0,
+                      width:30, height:30, borderRadius:'50%', flexShrink:0,
+                      background: infoTerbuka === info.id ? 'rgba(22,163,74,0.15)' : 'rgba(255,255,255,0.05)',
+                      border:`1px solid ${infoTerbuka === info.id ? 'rgba(22,163,74,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      fontSize:11, color: infoTerbuka === info.id ? '#4ade80' : '#475569',
                       transform: infoTerbuka === info.id ? 'rotate(180deg)' : 'rotate(0deg)',
-                      transition:'transform 0.3s',
-                    }}>
-                      ▼
-                    </div>
+                      transition:'all 0.35s cubic-bezier(0.16,1,0.3,1)',
+                    }}>▼</div>
                   </div>
 
-                  {/* Konten accordion */}
                   <div style={{
-                    maxHeight: infoTerbuka === info.id ? '600px' : '0px',
+                    maxHeight: infoTerbuka === info.id ? '800px' : '0px',
                     overflow:'hidden',
-                    transition:'max-height 0.4s cubic-bezier(0.16,1,0.3,1)',
+                    transition:'max-height 0.45s cubic-bezier(0.16,1,0.3,1)',
                   }}>
-                    <div style={{ padding:'0 24px 24px', borderTop:'1px solid rgba(51,65,85,0.4)' }}>
+                    <div style={{ padding:'4px 24px 24px', borderTop:'1px solid rgba(51,65,85,0.3)' }}>
                       {info.gambar_url && (
                         <div style={{ textAlign:'center', margin:'20px 0' }}>
-                          <img
-                            src={info.gambar_url} alt={info.judul}
-                            style={{ maxWidth:'100%', maxHeight:400, borderRadius:12, border:'1px solid rgba(51,65,85,0.5)' }}
+                          <img src={info.gambar_url} alt={info.judul}
+                            style={{ maxWidth:'100%', maxHeight:400, borderRadius:12, border:'1px solid rgba(51,65,85,0.4)' }}
                           />
                         </div>
                       )}
                       {info.konten && (
-                        <p style={{ fontSize:14, color:'#94a3b8', lineHeight:1.8, whiteSpace:'pre-wrap', marginTop: info.gambar_url ? 0 : 16 }}>
+                        <p style={{ fontSize:14, color:'#94a3b8', lineHeight:1.9, whiteSpace:'pre-wrap', marginTop: info.gambar_url ? 0 : 16 }}>
                           {info.konten}
                         </p>
                       )}
@@ -292,54 +385,51 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
-          </div>
-        </section>
-      )}
+          )}
+        </div>
+      </section>
 
       {/* ── MAPS SECTION ── */}
-      <section style={{ padding:'80px 24px', background:'rgba(5,10,20,0.8)' }}>
+      <section id="lokasi" style={{ padding:'100px 24px', background:'rgba(5,10,20,0.95)' }}>
         <div style={{ maxWidth:900, margin:'0 auto' }}>
           <div ref={mapsRef} style={{
-            textAlign:'center', marginBottom:40,
+            textAlign:'center', marginBottom:48,
             transform: mapsInView ? 'translateY(0)' : 'translateY(30px)',
             opacity: mapsInView ? 1 : 0,
-            transition:'all 0.7s cubic-bezier(0.16,1,0.3,1)',
+            transition:'all 0.8s cubic-bezier(0.16,1,0.3,1)',
           }}>
-            <div style={{ fontSize:12, letterSpacing:3, color:'#16a34a', fontWeight:700, marginBottom:12 }}>LOKASI</div>
-            <h2 style={{ fontSize:'clamp(1.6rem,4vw,2.4rem)', fontWeight:800, letterSpacing:-1, marginBottom:12 }}>Temukan Kami</h2>
-            <p style={{ color:'#64748b', fontSize:14 }}>Garuda Takalala Badminton Club</p>
+            <div style={{ fontSize:11, letterSpacing:4, color:'#16a34a', fontWeight:700, marginBottom:14 }}>LOKASI</div>
+            <h2 style={{ fontSize:'clamp(1.8rem,4vw,2.6rem)', fontWeight:800, letterSpacing:-1, marginBottom:10 }}>Temukan Kami</h2>
+            <p style={{ color:'#475569', fontSize:14 }}>Garuda Takalala Badminton Club · Takalala</p>
           </div>
 
           <div style={{
-            borderRadius:20, overflow:'hidden',
-            border:'1px solid rgba(22,163,74,0.2)',
-            boxShadow:'0 0 60px rgba(22,163,74,0.08)',
-            transform: mapsInView ? 'scale(1)' : 'scale(0.96)',
+            borderRadius:24, overflow:'hidden',
+            border:'1px solid rgba(22,163,74,0.15)',
+            boxShadow:'0 0 80px rgba(22,163,74,0.06)',
+            transform: mapsInView ? 'scale(1) translateY(0)' : 'scale(0.97) translateY(20px)',
             opacity: mapsInView ? 1 : 0,
-            transition:'all 0.8s cubic-bezier(0.16,1,0.3,1) 0.1s',
+            transition:'all 0.9s cubic-bezier(0.16,1,0.3,1) 0.1s',
           }}>
             <iframe
               src="https://maps.google.com/maps?q=-3.9871,122.5127&z=16&output=embed"
-              width="100%"
-              height="400"
-              style={{ border:0, display:'block', filter:'invert(90%) hue-rotate(180deg)' }}
-              allowFullScreen
-              loading="lazy"
+              width="100%" height="420"
+              style={{ border:0, display:'block', filter:'invert(90%) hue-rotate(180deg) brightness(0.85) contrast(1.1)' }}
+              allowFullScreen loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"
             />
           </div>
 
-          <div style={{ textAlign:'center', marginTop:20 }}>
-            <a
-              href="https://maps.app.goo.gl/eh669YpEdihuuT3j7"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display:'inline-flex', alignItems:'center', gap:8,
-                padding:'10px 24px', borderRadius:40, fontSize:13, fontWeight:600,
-                background:'rgba(22,163,74,0.15)', border:'1px solid rgba(22,163,74,0.3)',
-                color:'#4ade80', textDecoration:'none',
-              }}
+          <div style={{ textAlign:'center', marginTop:24 }}>
+            <a href="https://maps.app.goo.gl/eh669YpEdihuuT3j7" target="_blank" rel="noopener noreferrer" style={{
+              display:'inline-flex', alignItems:'center', gap:8,
+              padding:'11px 28px', borderRadius:40, fontSize:13, fontWeight:600,
+              background:'rgba(22,163,74,0.12)', border:'1px solid rgba(22,163,74,0.25)',
+              color:'#4ade80', textDecoration:'none',
+              transition:'all 0.2s',
+            }}
+            onMouseEnter={e=>e.target.style.background='rgba(22,163,74,0.2)'}
+            onMouseLeave={e=>e.target.style.background='rgba(22,163,74,0.12)'}
             >
               📍 Buka di Google Maps
             </a>
@@ -348,70 +438,75 @@ export default function LandingPage() {
       </section>
 
       {/* ── FOOTER ── */}
-      <footer style={{
-        padding:'48px 24px 32px',
-        background:'rgba(5,10,20,1)',
-        borderTop:'1px solid rgba(255,255,255,0.05)',
-        textAlign:'center',
-      }}>
+      <footer style={{ padding:'64px 24px 40px', background:'#030710', borderTop:'1px solid rgba(255,255,255,0.04)', textAlign:'center' }}>
         <div style={{ maxWidth:600, margin:'0 auto' }}>
-          <div style={{ fontSize:32, marginBottom:8 }}>🏸</div>
-          <div style={{ fontWeight:800, fontSize:18, marginBottom:4 }}>
+          <div style={{ fontSize:40, marginBottom:12 }}>🏸</div>
+          <div style={{ fontWeight:900, fontSize:22, marginBottom:6, letterSpacing:-0.5 }}>
             Garuda <span style={{ color:'#16a34a' }}>Takalala</span>
           </div>
-          <p style={{ fontSize:13, color:'#475569', marginBottom:24 }}>Badminton Club</p>
+          <p style={{ fontSize:13, color:'#334155', marginBottom:36 }}>Badminton Club · Takalala</p>
 
-          {/* Media sosial — isi URL manual di sini */}
-          <div style={{ display:'flex', justifyContent:'center', gap:16, marginBottom:32 }}>
+          {/* ── GANTI LINK MEDSOS DI BAWAH INI ── */}
+          <div style={{ display:'flex', justifyContent:'center', gap:12, marginBottom:40, flexWrap:'wrap' }}>
             {[
-              { label:'Instagram', icon:'📸', href:'#' },
-              { label:'WhatsApp', icon:'💬', href:'#' },
-              { label:'Facebook', icon:'📘', href:'#' },
+              { label:'Instagram', icon:'📸', href:'#' },  // ganti # dengan link Instagram
+              { label:'WhatsApp', icon:'💬', href:'#' },   // ganti # dengan link WhatsApp
+              { label:'Facebook', icon:'📘', href:'#' },   // ganti # dengan link Facebook
             ].map(s => (
               <a key={s.label} href={s.href} style={{
-                padding:'8px 18px', borderRadius:40, fontSize:12, fontWeight:600,
-                background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)',
-                color:'#94a3b8', textDecoration:'none', display:'flex', alignItems:'center', gap:6,
-              }}>
+                padding:'9px 20px', borderRadius:40, fontSize:13, fontWeight:600,
+                background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)',
+                color:'#475569', textDecoration:'none', display:'flex', alignItems:'center', gap:7,
+                transition:'all 0.2s',
+              }}
+              onMouseEnter={e=>{ e.currentTarget.style.color='#94a3b8'; e.currentTarget.style.borderColor='rgba(255,255,255,0.15)' }}
+              onMouseLeave={e=>{ e.currentTarget.style.color='#475569'; e.currentTarget.style.borderColor='rgba(255,255,255,0.08)' }}
+              >
                 {s.icon} {s.label}
               </a>
             ))}
           </div>
 
-          <div style={{ borderTop:'1px solid rgba(255,255,255,0.05)', paddingTop:24 }}>
+          <div style={{ borderTop:'1px solid rgba(255,255,255,0.04)', paddingTop:28 }}>
             <a href="/pemain" style={{
-              display:'inline-flex', alignItems:'center', gap:8,
+              display:'inline-flex', alignItems:'center', gap:8, marginBottom:24,
               padding:'10px 28px', borderRadius:40, fontSize:13, fontWeight:700,
-              background:'linear-gradient(135deg, #16a34a, #15803d)',
-              color:'white', textDecoration:'none',
-              boxShadow:'0 4px 20px rgba(22,163,74,0.3)',
-              marginBottom:24,
+              background:'rgba(22,163,74,0.1)', border:'1px solid rgba(22,163,74,0.2)',
+              color:'#4ade80', textDecoration:'none',
             }}>
               🏸 Login sebagai Pemain
             </a>
-            <p style={{ fontSize:12, color:'#334155' }}>
-              © {new Date().getFullYear()} Garuda Takalala · Powered by Badminton Manager
+            <p style={{ fontSize:12, color:'#1e293b' }}>
+              © {new Date().getFullYear()} Garuda Takalala · Badminton Manager
             </p>
           </div>
         </div>
       </footer>
 
-      {/* ── CSS ANIMASI ── */}
       <style>{`
-        @keyframes float0 {
-          0%, 100% { transform: translateY(0px) }
-          50% { transform: translateY(-12px) }
+        @keyframes floatParticle {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          33% { transform: translateY(-15px) rotate(5deg); }
+          66% { transform: translateY(-8px) rotate(-3deg); }
         }
-        @keyframes float1 {
-          0%, 100% { transform: translateY(0px) }
-          50% { transform: translateY(-18px) }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        @keyframes pulse {
+          0%, 100% { box-shadow: 0 0 8px #4ade80; }
+          50% { box-shadow: 0 0 16px #4ade80, 0 0 24px rgba(74,222,128,0.4); }
         }
-        @keyframes scrollLine {
-          0% { opacity: 1; transform: scaleY(1) }
-          100% { opacity: 0; transform: scaleY(0) }
+        @keyframes shimmer {
+          0% { background-position: 0% center; }
+          100% { background-position: 200% center; }
+        }
+        @keyframes scrollDown {
+          0% { transform: scaleY(0); transform-origin: top; opacity: 1; }
+          100% { transform: scaleY(1); transform-origin: top; opacity: 0; }
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html { scroll-behavior: smooth; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #050a14; }
+        ::-webkit-scrollbar-thumb { background: #16a34a; border-radius: 4px; }
       `}</style>
     </div>
   )
