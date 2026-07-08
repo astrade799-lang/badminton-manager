@@ -1,5 +1,10 @@
-import Layout from '@/components/Layout'
+import LandingPage from '@/components/landing/LandingPage'
 
-export default function Home() {
-  return <Layout />
+export const metadata = {
+  title: 'Garuda Takalala Badminton Club',
+  description: 'Komunitas bulutangkis aktif dan kompetitif di Takalala. Bergabung, main, dan pantau progress permainanmu.',
+}
+
+export default function Page() {
+  return <LandingPage />
 }
