@@ -178,6 +178,18 @@ export default function Pemain() {
     muatData()
   }
 
+  async function resetPin(p) {
+  if (!confirm(`Reset PIN "${p.nama}" ke default (0000)?\n\nPemain akan bisa login lagi pakai PIN 0000, lalu diminta ganti PIN baru saat login.`)) return
+  setLoading(true)
+  const { error } = await supabase
+    .from('pemain')
+    .update({ pin_hash: null, pin_sudah_diganti: false })
+    .eq('id', p.id)
+  setLoading(false)
+  if (error) { tampilPesan('❌ ' + error.message); return }
+  tampilPesan(`🔑 PIN "${p.nama}" berhasil direset ke 0000`)
+}
+
   const dataFiltered = daftarPemain.filter(p =>
     p.nama.toLowerCase().includes(cari.toLowerCase()) ||
     (p.no_hp || '').includes(cari)
@@ -292,9 +304,10 @@ export default function Pemain() {
                         )}
                       </div>
                       <div style={{ display:'flex', gap:6, marginTop:8 }}>
-                        <button style={{ ...btnS, flex:1, padding:'6px 10px', fontSize:12 }} onClick={() => bukaEdit(p)}>✏️ Edit</button>
-                        <button style={btnR} onClick={() => hapus(p)}>🗑️ Hapus</button>
-                      </div>
+  <button style={{ ...btnS, flex:1, padding:'6px 10px', fontSize:12 }} onClick={() => bukaEdit(p)}>✏️ Edit</button>
+  <button style={{ ...btnS, flex:1, padding:'6px 10px', fontSize:12 }} onClick={() => resetPin(p)}>🔑 Reset PIN</button>
+  <button style={btnR} onClick={() => hapus(p)}>🗑️ Hapus</button>
+</div>
                     </>
                   )}
                 </div>
@@ -344,9 +357,10 @@ export default function Pemain() {
                           )}
                         </td>
                         <td style={{ ...td, display:'flex', gap:6 }}>
-                          <button style={{ ...btnS, padding:'6px 12px', fontSize:12 }} onClick={() => bukaEdit(p)}>✏️ Edit</button>
-                          <button style={btnR} onClick={() => hapus(p)}>🗑️ Hapus</button>
-                        </td>
+  <button style={{ ...btnS, padding:'6px 12px', fontSize:12 }} onClick={() => bukaEdit(p)}>✏️ Edit</button>
+  <button style={{ ...btnS, padding:'6px 12px', fontSize:12 }} onClick={() => resetPin(p)}>🔑 Reset PIN</button>
+  <button style={btnR} onClick={() => hapus(p)}>🗑️ Hapus</button>
+</td>
                       </>
                     )}
                   </tr>
