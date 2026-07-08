@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { Trophy, Zap, MapPin, Users, Award, ChevronDown } from 'lucide-react'
 
 function useScrollY() {
   const [scrollY, setScrollY] = useState(0)
@@ -59,6 +60,22 @@ const labelKategori = {
   turnamen: '🏆 Turnamen',
   umum: '📢 Info',
 }
+
+// ── SATU SUMBER DATA UNTUK LINK SOSMED — ganti # di sini, otomatis update di hero & footer ──
+const sosmedLinks = [
+  { label: 'Instagram', icon: '📸', href: '#' }, // ganti # dengan link Instagram
+  { label: 'WhatsApp',  icon: '💬', href: '#' }, // ganti # dengan link WhatsApp
+  { label: 'Facebook',  icon: '📘', href: '#' }, // ganti # dengan link Facebook
+]
+
+// ── ISI MARQUEE — tambah/ganti icon & label di sini (cari nama icon lain di lucide.dev/icons) ──
+const marqueeItems = [
+  { Icon: Trophy, label: 'GARUDA TAKALALA' },
+  { Icon: Zap,    label: 'SESI SORE & MALAM' },
+  { Icon: Award,  label: 'TURNAMEN BERKALA' },
+  { Icon: MapPin, label: 'TAKALALA' },
+  { Icon: Users,  label: 'KOMUNITAS SOLID' },
+]
 
 export default function LandingPage() {
   const scrollY = useScrollY()
@@ -141,14 +158,14 @@ export default function LandingPage() {
             padding:'8px 20px', borderRadius:40, fontSize:13, fontWeight:700,
             background:'#16a34a', color:'white', textDecoration:'none',
             boxShadow:'0 0 20px rgba(22,163,74,0.3)',
-          }}>Login Pemain →</a>
+          }}>Login →</a>
         </div>
       </nav>
 
       {/* ── HERO SECTION ── */}
       <section style={{ position:'relative', height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden' }}>
 
-        {/* ── GANTI GAMBAR DI SINI: ubah URL backgroundImage di bawah ini ── */}
+        {/* ── GAMBAR HERO ── */}
         <div style={{
           position:'absolute', inset:0,
           backgroundImage:`url('https://barae.desa.id/wp-content/uploads/2026/07/bgDeks7.png')`,
@@ -225,49 +242,70 @@ export default function LandingPage() {
 
           <p style={{
             fontSize:'clamp(1.2rem, 2vw, 1.15rem)',
-            color:'#d4ddebff', lineHeight:1.8, marginBottom:48,
-            maxWidth:700, margin:'0 auto 48px',
+            color:'#d4ddebff', lineHeight:1.8, marginBottom:32,
+            maxWidth:700, margin:'0 auto 32px',
           }}>
             Garuda Takalala — tempat para pecinta bulutangkis berkumpul, bersaing, dan berkembang bersama.
           </p>
-{/* 
-          <div style={{ display:'flex', gap:12, justifyContent:'center', flexWrap:'wrap' }}>
-            <button onClick={scrollKeInfo} style={{
-              padding:'14px 36px', borderRadius:40, fontSize:15, fontWeight:700,
-              background:'linear-gradient(135deg, #16a34a, #15803d)',
-              color:'white', border:'none', cursor:'pointer', fontFamily:'inherit',
-              boxShadow:'0 8px 32px rgba(22,163,74,0.4)',
-              transition:'transform 0.2s, box-shadow 0.2s',
-            }}
-            onMouseEnter={e=>{ e.target.style.transform='translateY(-2px)'; e.target.style.boxShadow='0 12px 40px rgba(22,163,74,0.5)' }}
-            onMouseLeave={e=>{ e.target.style.transform='translateY(0)'; e.target.style.boxShadow='0 8px 32px rgba(22,163,74,0.4)' }}
-            >
-              Lihat Informasi ↓
-            </button>
-            <a href="#lokasi" onClick={(e)=>{ e.preventDefault(); document.getElementById('lokasi')?.scrollIntoView({behavior:'smooth'}) }} style={{
-              padding:'14px 36px', borderRadius:40, fontSize:15, fontWeight:700,
-              background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)',
-              color:'white', textDecoration:'none', backdropFilter:'blur(10px)',
-              transition:'background 0.2s',
-            }}
-            onMouseEnter={e=>e.target.style.background='rgba(255,255,255,0.1)'}
-            onMouseLeave={e=>e.target.style.background='rgba(255,255,255,0.06)'}
-            >
-              📍 Lokasi
-            </a>
-          </div>
-Scroll indicator */}
 
+          {/* ── SOSMED ICONS DI HERO ── */}
+          <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap', marginBottom:36 }}>
+            {sosmedLinks.map(s => (
+              <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" style={{
+                display:'flex', alignItems:'center', gap:6,
+                padding:'8px 16px', borderRadius:40, fontSize:12, fontWeight:600,
+                background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.12)',
+                color:'#cbd5e1', textDecoration:'none', backdropFilter:'blur(8px)',
+                transition:'all 0.2s',
+              }}
+              onMouseEnter={e=>{ e.currentTarget.style.background='rgba(22,163,74,0.15)'; e.currentTarget.style.borderColor='rgba(22,163,74,0.35)' }}
+              onMouseLeave={e=>{ e.currentTarget.style.background='rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor='rgba(255,255,255,0.12)' }}
+              >
+                <span>{s.icon}</span> {s.label}
+              </a>
+            ))}
+          </div>
         </div>
 
-        {/* Scroll indicator */}
+        {/* ── LOGO / ICON SCROLL MARQUEE ── */}
         <div style={{
-          position:'absolute', bottom:32, left:'50%', transform:'translateX(-50%)',
-          display:'flex', flexDirection:'column', alignItems:'center', gap:8,
-          opacity: scrollY > 80 ? 0 : 1, transition:'opacity 0.3s',
+          position:'absolute', bottom:70, left:0, right:0,
+          overflow:'hidden',
+          padding:'12px 0',
+          background:'rgba(5,10,20,0.35)',
+          borderTop:'1px solid rgba(255,255,255,0.06)',
+          borderBottom:'1px solid rgba(255,255,255,0.06)',
+          backdropFilter:'blur(6px)',
         }}>
-          <span style={{ fontSize:10, color:'#334155', letterSpacing:3 }}>SCROLL</span>
-          <div style={{ width:1, height:40, background:'linear-gradient(180deg, #334155, transparent)', animation:'scrollDown 1.5s ease-in-out infinite' }} />
+          <div style={{
+            display:'flex', width:'max-content', gap:48,
+            animation:'marqueeScroll 22s linear infinite',
+          }}>
+            {[...marqueeItems, ...marqueeItems].map(({ Icon, label }, i) => (
+              <span key={i} style={{
+                display:'flex', alignItems:'center', gap:8,
+                fontSize:13, fontWeight:700, letterSpacing:1.5,
+                color:'#4ade80', opacity:0.75, whiteSpace:'nowrap',
+              }}>
+                <Icon size={16} strokeWidth={2.2} />
+                {label}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* ── SCROLL INDICATOR (klikable, di atas marquee) ── */}
+        <div
+          onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
+          style={{
+            position:'absolute', bottom:135, left:'50%', transform:'translateX(-50%)',
+            display:'flex', flexDirection:'column', alignItems:'center', gap:2,
+            opacity: scrollY > 80 ? 0 : 1, transition:'opacity 0.3s',
+            cursor:'pointer',
+          }}
+        >
+          <span style={{ fontSize:10, color:'#64748b', letterSpacing:3, marginBottom:4 }}>SCROLL</span>
+          <ChevronDown size={20} color="#4ade80" style={{ animation:'bounceDown 1.6s ease-in-out infinite' }} />
         </div>
       </section>
 
@@ -446,14 +484,10 @@ Scroll indicator */}
           </div>
           <p style={{ fontSize:13, color:'#334155', marginBottom:36 }}>Badminton Club · Takalala</p>
 
-          {/* ── GANTI LINK MEDSOS DI BAWAH INI ── */}
+          {/* ── SOSMED (pakai data yang sama dengan hero) ── */}
           <div style={{ display:'flex', justifyContent:'center', gap:12, marginBottom:40, flexWrap:'wrap' }}>
-            {[
-              { label:'Instagram', icon:'📸', href:'#' },  // ganti # dengan link Instagram
-              { label:'WhatsApp', icon:'💬', href:'#' },   // ganti # dengan link WhatsApp
-              { label:'Facebook', icon:'📘', href:'#' },   // ganti # dengan link Facebook
-            ].map(s => (
-              <a key={s.label} href={s.href} style={{
+            {sosmedLinks.map(s => (
+              <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" style={{
                 padding:'9px 20px', borderRadius:40, fontSize:13, fontWeight:600,
                 background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)',
                 color:'#475569', textDecoration:'none', display:'flex', alignItems:'center', gap:7,
@@ -474,7 +508,7 @@ Scroll indicator */}
               background:'rgba(22,163,74,0.1)', border:'1px solid rgba(22,163,74,0.2)',
               color:'#4ade80', textDecoration:'none',
             }}>
-              🏸 Login sebagai Pemain
+              🏸 Login
             </a>
             <p style={{ fontSize:12, color:'#1e293b' }}>
               © {new Date().getFullYear()} Garuda Takalala · Badminton Manager
@@ -501,6 +535,14 @@ Scroll indicator */}
         @keyframes scrollDown {
           0% { transform: scaleY(0); transform-origin: top; opacity: 1; }
           100% { transform: scaleY(1); transform-origin: top; opacity: 0; }
+        }
+        @keyframes bounceDown {
+          0%, 100% { transform: translateY(0); opacity: 0.5; }
+          50% { transform: translateY(6px); opacity: 1; }
+        }
+        @keyframes marqueeScroll {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html { scroll-behavior: smooth; }
