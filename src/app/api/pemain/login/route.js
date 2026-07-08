@@ -4,7 +4,7 @@ import crypto from 'crypto'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
 const PIN_DEFAULT = '0000'
@@ -18,7 +18,6 @@ export async function POST(request) {
       return Response.json({ error: 'No. HP dan PIN wajib diisi' }, { status: 400 })
     }
 
-    // Cari pemain berdasarkan no_hp (harus persis sama)
     const { data: pemain, error: errPemain } = await supabase
       .from('pemain')
       .select('id, nama, no_hp, pin_hash, pin_sudah_diganti')
@@ -32,8 +31,6 @@ export async function POST(request) {
       return Response.json({ error: 'No. HP tidak ditemukan' }, { status: 401 })
     }
 
-    // Cek PIN: kalau pin_hash belum ada (pemain baru), bandingkan dengan PIN default polos.
-    // Kalau sudah ada pin_hash, bandingkan dengan bcrypt.
     let pinValid = false
     if (!pemain.pin_hash) {
       pinValid = pin === PIN_DEFAULT
@@ -45,7 +42,6 @@ export async function POST(request) {
       return Response.json({ error: 'PIN salah' }, { status: 401 })
     }
 
-    // Buat token sesi acak (256-bit), bukan ID pemain langsung — supaya tidak bisa ditebak
     const token = crypto.randomBytes(32).toString('hex')
     const expiredAt = new Date(Date.now() + SESI_DURASI_HARI * 24 * 60 * 60 * 1000).toISOString()
 

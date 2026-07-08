@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
 export async function POST(request) {
@@ -17,7 +17,6 @@ export async function POST(request) {
       return Response.json({ error: 'PIN harus 4-6 digit angka' }, { status: 400 })
     }
 
-    // Validasi token dulu, sama seperti di /me
     const { data: sesi, error: errSesi } = await supabase
       .from('sesi_pemain')
       .select('pemain_id, expired_at')

@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
 export async function POST(request) {
@@ -23,7 +23,6 @@ export async function POST(request) {
     }
 
     if (new Date(sesi.expired_at) < new Date()) {
-      // Token sudah lewat masa berlaku — bersihkan baris sesi ini sekalian
       await supabase.from('sesi_pemain').delete().eq('token', token)
       return Response.json({ error: 'Sesi sudah berakhir, silakan login ulang' }, { status: 401 })
     }
